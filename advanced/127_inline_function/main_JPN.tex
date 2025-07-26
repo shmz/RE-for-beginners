@@ -1,0 +1,25 @@
+\mysection{インライン関数}
+\myindex{Inline code}
+\label{inline_code}
+
+インライン化されたコードとは、コンパイラが小さなまたは極小の関数に対する呼び出し命令を配置する代わりに、
+その本体をその場に配置することです。
+
+\lstinputlisting[caption=簡単な例,style=customc]{\CURPATH/1.c}
+
+\dotsは非常に予測可能な方法でコンパイルされますが、GCC最適化（\Othree）をオンにすると、以下が表示されます：
+
+\lstinputlisting[caption=\Optimizing GCC 4.8.1,style=customasmx86]{\CURPATH/1.s}
+
+（ここでは除算は乗算によって実行されています（\myref{sec:divisionbymult}））。
+
+はい、私たちの小さな関数\TT{celsius\_to\_fahrenheit()}は\printf呼び出しの前に配置されています。
+
+なぜでしょうか？この関数のコードを実行することに加えて呼び出し/復帰のオーバーヘッドよりも高速になる可能性があるからです。
+
+現代の最適化コンパイラは、インライン化のために小さな関数を自動的に選択しています。
+しかし、その宣言で\q{inline}キーワードでマークすれば、
+いくつかの関数をインライン化するようにコンパイラに追加で強制することが可能です。
+
+% sections
+\input{\CURPATH/str_mem/main}

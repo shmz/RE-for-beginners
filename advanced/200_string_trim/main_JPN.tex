@@ -1,0 +1,26 @@
+\mysection{文字列のトリミング}
+\newcommand{\CRLF}{\ac{CR}/\ac{LF}}
+
+非常に一般的な文字列処理タスクは、開始および／または終了時に一部の文字を削除することです。
+
+この例では、入力文字列の末尾からすべての改行文字
+（\CRLF{}）を削除する関数を扱います：
+
+\lstinputlisting[style=customc]{\CURPATH/strtrim_EN.c}
+
+入力引数は常に終了時に返されます。これは、\main関数で行われているように、
+文字列処理関数を連鎖させたい場合に便利です。
+
+\myindex{\CLanguageElements!Short-circuit}
+for()の第2部分（\TT{str\_len>0 \&\& (c=s[str\_len-1])}）は、\CCpp において
+いわゆる\q{短絡回路}と呼ばれ、非常に便利です \InSqBrackets{\CNotes 1.3.8}。
+
+\CCpp コンパイラは左から右への評価順序を保証します。
+
+したがって、評価後に最初の節が偽である場合、2番目の節は決して評価されません。
+
+% subsections
+\input{\CURPATH/x64_JPN}
+\input{\CURPATH/ARM64_JPN}
+\input{\CURPATH/ARM_JPN}
+\input{\CURPATH/MIPS_JPN}

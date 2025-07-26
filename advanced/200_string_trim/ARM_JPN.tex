@@ -1,0 +1,21 @@
+\subsection{ARM: \OptimizingKeilVI (\ARMMode)}
+
+またしても、コンパイラはARMモードの条件付き命令を活用しているため、
+コードははるかにコンパクトです。
+
+\lstinputlisting[caption=\OptimizingKeilVI (\ARMMode),style=customasmARM]{\CURPATH/Keil_ARM_O3_EN.s}
+
+\subsection{ARM: \OptimizingKeilVI (\ThumbMode)}
+\myindex{\CompilerAnomaly}
+\label{Keil_anomaly}
+
+Thumbモードでは条件付き命令が少ないため、コードはより単純です。
+
+しかし、0x20と0x1Fオフセット（22行目と23行目）には実に奇妙なものがあります。
+なぜKeilコンパイラはそうしたのでしょうか？
+正直なところ、言うのは難しいです。
+
+これはKeilの最適化プロセスの癖でしょう。
+それにもかかわらず、コードは正しく動作します。
+
+\lstinputlisting[caption=\OptimizingKeilVI (\ThumbMode),numbers=left,style=customasmARM]{\CURPATH/Keil_thumb_O3_EN.s}

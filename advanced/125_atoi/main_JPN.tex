@@ -1,0 +1,159 @@
+\mysection{文字列から数値への変換 (atoi())}
+
+\myindex{\CStandardLibrary!atoi()}
+
+標準のatoi() C関数を再実装してみましょう。
+
+\subsection{簡単な例}
+
+\ac{ASCII}エンコーディングで表現された数値を読み取る最も簡単な方法がここにあります。
+
+これはエラーに対して脆弱です：数字以外の文字は不正な結果を導きます。
+
+\lstinputlisting[style=customc]{\CURPATH/atoi.c}
+
+このアルゴリズムが行うことは、左から右に数字を読み取ることです。
+
+各数字からゼロの\ac{ASCII}文字が減算されます。
+
+\q{0}から\q{9}までの数字は\ac{ASCII}テーブルで連続しているため、
+\q{0}文字の正確な値を知る必要すらありません。
+
+知る必要があるのは、\q{0}マイナス\q{0}は0、\q{9}マイナス\q{0}は9などということです。
+
+各文字から\q{0}を減算すると、0から9までの数値が得られます。
+
+もちろん、他の文字は不正な結果を導きます！
+
+各数字は最終結果（変数\q{rt}内）に追加される必要がありますが、最終結果
+も各数字で10倍されます。
+
+言い換えると、結果は各反復で10進形式で1桁左にシフトされます。
+
+最後の数字は追加されますが、シフトはありません。
+
+\subsubsection{\Optimizing MSVC 2013 x64}
+
+\lstinputlisting[caption=\Optimizing MSVC 2013 x64,style=customasmx86]{\CURPATH/atoi.asm.MSVC2013.x64.Ox_EN}
+
+文字は2つの場所でロードできます：最初の文字とそれに続くすべての文字です。
+これはループの再グループ化のために配置されています。
+\myindex{x86!\Instructions!LEA}
+
+10での乗算命令はなく、2つのLEA命令が代わりにこれを行います。
+\myindex{x86!\Instructions!ADD}
+\myindex{x86!\Instructions!SUB}
+
+MSVCは時々SUBの代わりに負の定数を使ったADD命令を使用します。
+これがその場合です。
+
+これがSUBより良い理由を言うのは非常に困難です。
+しかし、MSVCはこれをよく行います。
+
+\subsubsection{\Optimizing GCC 4.9.1 x64}
+
+\Optimizing GCC 4.9.1はより簡潔ですが、最後に冗長なRET命令が1つあります。
+1つで十分でしょう。
+
+\lstinputlisting[caption=\Optimizing GCC 4.9.1 x64,style=customasmx86]{\CURPATH/atoi.s.GCC491.O3.x64_EN}
+
+\subsubsection{\OptimizingKeilVI (\ARMMode)}
+
+\lstinputlisting[caption=\OptimizingKeilVI (\ARMMode),style=customasmARM]{\CURPATH/atoi.s.ARM.O3_EN}
+
+\subsubsection{\OptimizingKeilVI (\ThumbMode)}
+
+\lstinputlisting[caption=\OptimizingKeilVI (\ThumbMode),style=customasmARM]{\CURPATH/atoi.s.thumb.O3_EN}
+
+興味深いことに、学校の数学から、加算と
+減算演算の順序は重要でないことを思い出すかもしれません。
+
+これが私たちの場合です：最初に$rt*10 - '0'$式が計算され、次に入力文字値
+がそれに追加されます。
+
+確かに、結果は同じですが、コンパイラはいくらかの再グループ化を行いました。
+
+\subsubsection{\Optimizing GCC 4.9.1 ARM64}
+
+ARM64コンパイラはプリインクリメント命令接尾辞を使用できます：
+
+\lstinputlisting[caption=\Optimizing GCC 4.9.1 ARM64,style=customasmARM]{\CURPATH/atoi.s.GCC49.ARM64.O3_EN}
+
+\subsection{やや高度な例}
+
+私の新しいコードスニペットはより高度で、最初の文字で\q{マイナス}記号をチェックし、
+入力文字列で非数字が見つかった場合はエラーを報告します：
+
+\lstinputlisting[style=customc]{\CURPATH/atoi2.c}
+
+\subsubsection{\Optimizing GCC 4.9.1 x64}
+
+\lstinputlisting[caption=\Optimizing GCC 4.9.1 x64,style=customasmx86]{\CURPATH/atoi2.s.GCC491.O3.x64_EN}
+
+\myindex{x86!\Instructions!NEG}
+
+文字列の開始時に\q{マイナス}記号が見つかった場合、最後に\INS{NEG}命令が実行されます。
+これは単に数値を否定します。
+
+\label{one_comparison_instead_of_two}
+言及する必要があることがもう一つあります。
+
+一般的なプログラマは文字が数字でないかどうかをどのようにチェックするでしょうか？
+ソースコード内にあるように：
+
+\begin{lstlisting}[style=customc]
+if (*s<'0' || *s>'9')
+    ...
+\end{lstlisting}
+
+2つの比較演算があります。
+
+興味深いのは、両方の演算を単一のもので置き換えることができることです：
+文字値から\q{0}を減算し、
+
+結果を符号なし値として扱い（これは重要です）、9より大きいかどうかをチェックします。
+
+例えば、ユーザー入力にドット文字（\q{.}）が含まれており、これは\ac{ASCII}コード46を持つとしましょう。
+結果を符号付き数として扱うと$46-48=-2$です。
+
+確かに、ドット文字は\ac{ASCII}テーブルで\q{0}文字より2つ前に位置しています。
+しかし、結果を符号なしの値として扱うと\TT{0xFFFFFFFE}（4294967294）
+となり、これは確実に9より大きいです！
+
+コンパイラはこれをよく行うので、これらのトリックを認識することが重要です。
+
+この本の別の例：
+\myref{toupper_one_comparison}。
+
+\Optimizing MSVC 2013 x64も同じトリックを行います。
+
+\subsubsection{\OptimizingKeilVI (\ARMMode)}
+
+\lstinputlisting[caption=\OptimizingKeilVI (\ARMMode),numbers=left,style=customasmARM]{\CURPATH/atoi2.s.ARM.O3_EN}
+
+32ビットARMにはNEG命令がないため、\q{逆減算}演算（31行目）
+がここで使用されます。
+
+これは\INS{CMP}命令（29行目）の結果が\q{Not Equal}（したがって\TT{-NE}接尾辞）だった場合にトリガーされます。
+\myindex{ARM!\Instructions!RSB}
+
+\INS{RSBNE}が行うことは、結果の値を0から減算することです。
+
+これは通常の減算演算と同様に動作しますが、オペランドを入れ替えます。
+
+0から任意の数を減算すると否定となります：$0-x=-x$。
+
+Thumbモードコードはほぼ同じです。
+
+\myindex{ARM!\Instructions!NEG}
+ARM64用のGCC 4.9は、ARM64で利用可能なNEG命令を使用できます。
+
+\subsection{\Exercise{}}
+
+\myindex{Fuzzing}
+ちなみに、セキュリティ研究者は、不正なデータの処理中にプログラムの予測不可能な動作をよく扱います。
+
+例えば、ファジング中に。
+演習として、非数字文字を入力して何が起こるかを見てみてください。
+
+何が起こったか、そしてなぜそうなったかを説明してみてください。

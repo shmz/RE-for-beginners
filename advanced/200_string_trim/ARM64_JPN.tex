@@ -1,0 +1,17 @@
+\subsection{ARM64: \NonOptimizing GCC (Linaro) 4.9}
+
+この実装は単純明快です：
+
+\lstinputlisting[caption=\NonOptimizing GCC (Linaro) 4.9,style=customasmARM]{\CURPATH/GCC49_ARM64_O0_EN.s}
+
+\subsection{ARM64: \Optimizing GCC (Linaro) 4.9}
+
+これはより高度な最適化です。
+
+最初の文字は開始時にロードされ、10（\ac{LF}文字）と比較されます。
+
+文字は、最初の文字の後の文字について、メインループでもロードされます。
+
+これは \myref{string_trim_GCC_x64_O3} の例と似ています。
+
+\lstinputlisting[caption=\Optimizing GCC (Linaro) 4.9,style=customasmARM]{\CURPATH/GCC49_ARM64_O3_EN.s}

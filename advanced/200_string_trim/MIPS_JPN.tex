@@ -1,0 +1,7 @@
+\subsection{MIPS}
+
+\lstinputlisting[caption=\Optimizing GCC 4.4.5 (IDA),style=customasmMIPS]{\CURPATH/MIPS_O3_IDA_EN.lst}
+
+S-で始まるレジスタは\q{saved temporaries}とも呼ばれるため、
+\$S0の値はローカルスタックに保存され、
+終了時に復元されます。
