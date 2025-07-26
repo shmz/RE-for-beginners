@@ -1,0 +1,25 @@
+\subsection{\IT{vprintf()}関数のケース}
+\myindex{\CStandardLibrary!vprintf}
+\myindex{\CStandardLibrary!va\_list}
+
+多くのプログラマは、printf のようなフォーマット文字列 + 可変数の引数を取る独自のログ関数を定義します。
+
+もう一つの一般的な例は、何らかのメッセージを出力して終了する die() 関数です。
+
+未知数の入力引数をパックして\printf 関数に渡す何らかの方法が必要です。
+しかし、どのように？
+
+そのため、名前に\q{v}が付く関数があります。
+
+その一つが\IT{vprintf()}です：これはフォーマット文字列と\TT{va\_list}型の変数へのポインタを取ります：
+
+\lstinputlisting[style=customc]{\CURPATH/die.c}
+
+詳しく調べると、\TT{va\_list}が配列へのポインタであることがわかります。
+コンパイルしてみましょう：
+
+\lstinputlisting[caption=\Optimizing MSVC 2010,style=customasmx86]{\CURPATH/die_MSVC2010_Ox_EN.asm}
+
+私たちの関数が行うことは、単に引数へのポインタを取得し、それを\IT{vprintf()}に渡すことであり、その関数はそれを無限の引数配列として扱うことがわかります！
+
+\lstinputlisting[caption=\Optimizing MSVC 2012 x64,style=customasmx86]{\CURPATH/die_MSVC2012_x64_Ox_EN.asm}

@@ -1,0 +1,69 @@
+\subsection{算術平均の計算}
+
+\gls{arithmetic mean}を計算したいと想像し、何らかの奇妙な理由で、すべての値を関数の引数として指定したいとします。
+
+しかし、\CCpp の可変引数関数では引数の数を取得することは不可能なので、$-1$の値を終端記号として使用しましょう。
+
+\subsubsection{va\_argマクロの使用}
+
+そのような引数を扱うためのマクロを定義する標準的な stdarg.h ヘッダファイルがあります。
+
+\printf と \scanf 関数もそれらを使用します。
+
+\lstinputlisting[style=customc]{\CURPATH/arith_EN.c}
+
+最初の引数は通常の引数として扱う必要があります。
+\myindex{\CStandardLibrary!va\_arg}
+
+他のすべての引数は\TT{va\_arg}マクロを使ってロードされ、それから合計されます。
+
+では、内部では何が起こっているのでしょうか？
+
+\myparagraph{\IT{cdecl}呼び出し規約}
+
+\lstinputlisting[caption=\Optimizing MSVC 6.0,style=customasmx86]{\CURPATH/arith_MSVC60_Ox_EN.asm}
+
+引数は、見ての通り、\main に一つずつ渡されます。
+
+最初の引数は最初にローカルスタックにプッシュされます。
+
+終端値（$-1$）は最後にプッシュされます。
+
+\TT{arith\_mean()}関数は最初の引数の値を取得し、それを$sum$変数に格納します。
+
+次に、\EDX レジスタを2番目の引数のアドレスに設定し、そこから値を取得し、$sum$に加算し、$-1$が見つかるまで無限ループでこれを行います。
+
+それが見つかると、合計はすべての値の数（$-1$を除く）で割られ、\gls{quotient}が返されます。
+
+つまり、言い換えれば、関数はスタックフラグメントを無限長の整数値の配列として扱います。
+
+今では、なぜ\IT{cdecl}呼び出し規約が最初の引数を最後にスタックにプッシュすることを強制するのかを理解できます。
+
+そうでなければ、最初の引数を見つけることが不可能になるか、printf のような関数では、フォーマット文字列のアドレスを見つけることが不可能になるからです。
+
+\myparagraph{レジスタベースの呼び出し規約}
+\label{variadic_arith_registers}
+
+注意深い読者は、最初のいくつかの引数がレジスタで渡される呼び出し規約についてどうなるかと疑問に思うかもしれません。
+見てみましょう：
+
+\lstinputlisting[caption=\Optimizing MSVC 2012 x64,style=customasmx86]{\CURPATH/arith_MSVC_2012_Ox_x64_EN.asm}
+
+最初の4つの引数がレジスタで渡され、さらに2つがスタックで渡されることがわかります。
+
+\TT{arith\_mean()}関数は最初にこれらの4つの引数を\IT{Shadow Space}に配置し、次に\IT{Shadow Space}とその後ろのスタックを単一の連続した配列として扱います！
+
+GCCについてはどうでしょうか？ここでは少し不格好になります。なぜなら、関数が2つの部分に分割されるからです：
+最初の部分はレジスタを「レッドゾーン」に保存し、そのスペースを処理し、関数の2番目の部分はスタックを処理します：
+
+\lstinputlisting[caption=\Optimizing GCC 4.9.1 x64,style=customasmx86]{\CURPATH/arith_GCC491_x64_O3_EN.s}
+
+ちなみに、\IT{Shadow Space}の類似の使用法も こちらで考慮されています：\myref{pointer_to_argument}。
+
+\subsubsection{最初の関数引数へのポインタの使用}
+
+例は\TT{va\_arg}マクロなしで書き直すことができます：
+
+\lstinputlisting[style=customc]{\CURPATH/arith2.c}
+
+つまり、引数セットが単語（32ビットまたは64ビット）の配列である場合、最初の要素から始まる配列要素を単純に列挙します。

@@ -1,0 +1,128 @@
+\mysection{フィボナッチ数列}
+
+プログラミングの教科書で広く使われるもう一つの例は、
+フィボナッチ数列\footnote{\url{http://go.yurichev.com/17332}}を生成する再帰関数です。
+この数列は非常に単純で、連続する各数は前の2つの数の和になります。
+最初の2つの数は0と1、または1と1です。
+
+数列は次のように始まります：
+
+\begin{center}
+$0, 1, 1, 2, 3, 5, 8, 13, 21, 34, 55, 89, 144, 233, 377, 610, 987, 1597, 2584, 4181 ...$
+\end{center}
+
+\subsection{例 \#1}
+
+実装は単純です。このプログラムは21まで数列を生成します。
+
+\lstinputlisting[style=customc]{\CURPATH/fib.c}
+
+\lstinputlisting[caption=MSVC 2010 x86,style=customasmx86]{\CURPATH/fib.asm}
+
+これを使ってスタックフレームを説明します。
+
+\clearpage
+
+例を\olly にロードし、\ttf{}の最後の呼び出しまでトレースしましょう：
+
+\begin{figure}[H]
+\centering
+\myincludegraphics{\CURPATH/olly.png}
+\caption{\olly: \ttf{}の最後の呼び出し}
+\label{fig:fib_olly}
+\end{figure}
+
+\clearpage
+スタックをより詳しく調べてみましょう。
+コメントは本書の著者によって追加されました
+\footnote{ちなみに、\olly では複数のエントリを選択してクリップボードにコピーすることができます（Ctrl-C）。
+この例では著者がこれを行いました。}：
+
+\lstinputlisting{\CURPATH/stack_EN.txt}
+
+この関数は再帰的\footnote{つまり、自分自身を呼び出す}であるため、スタックは\q{サンドイッチ}のように見えます。
+
+\IT{limit}引数は常に同じ（\TT{0x14}または20）であることがわかりますが、$a$と$b$引数は各呼び出しで異なります。
+
+また、\ac{RA}と保存された\EBP値もあります。
+\olly はEBPベースのフレームを決定することができるため、これらの括弧を描画します。
+各括弧内の値は\gls{stack frame}を構成します。
+言い換えれば、各関数の実体がスクラッチスペースとして使用するスタック領域です。
+
+また、各関数の実体は（関数引数を除いて）そのフレームの境界を越えてスタック要素にアクセスしてはならないとも言えますが、
+技術的には可能です。
+
+これは通常正しいことですが、関数にバグがない限りです。
+
+保存された各\EBP値は、前の\gls{stack frame}のアドレスです：
+これが一部のデバッガがスタックをフレームに容易に分割し、各関数の引数をダンプできる理由です。
+% TODO add about StackWalk (MSDN)
+
+ここで見られるように、各関数の実体は次の関数呼び出しのための引数を準備します。
+
+最後に\main の3つの引数が見えます。
+\TT{argc}は1です（実際、プログラムをコマンドライン引数なしで実行しました）。
+
+これは容易にスタックオーバーフローを引き起こします：制限チェックを削除（またはコメントアウト）するだけで、
+例外\TT{0xC00000FD}（スタックオーバーフロー）でクラッシュします。
+
+\subsection{例 \#2}
+
+私の関数には冗長性があるため、新しいローカル変数\IT{next}を追加し、すべての\q{a+b}をそれで置き換えましょう：
+
+\lstinputlisting[style=customc]{\CURPATH/fib2.c}
+
+これは最適化なしMSVCの出力で、\IT{next}変数は実際にローカルスタックに割り当てられます：
+
+\lstinputlisting[caption=MSVC 2010 x86,style=customasmx86]{\CURPATH/fib2.asm}
+
+\clearpage
+再び\olly にロードしましょう：
+
+\begin{figure}[H]
+\centering
+\myincludegraphics{\CURPATH/olly2.png}
+\caption{\olly: \ttf{}の最後の呼び出し}
+\label{fig:fib_olly2}
+\end{figure}
+
+今度は\IT{next}変数が各フレームに存在します。
+
+\clearpage
+
+スタックをより詳しく調べてみましょう。著者が再びコメントを追加しました：
+
+\lstinputlisting{\CURPATH/stack2_EN.txt}
+
+% FIXME what a word! hmmm...
+ここで見ることができます：\IT{next}値は各関数の実体で計算され、次の実体への引数$b$として渡されます。
+
+\subsection{まとめ}
+
+\label{Recursion_and_tail_call}
+\myindex{\Recursion}
+再帰関数は美学的に美しいですが、重いスタック使用のため技術的にはパフォーマンスを低下させる可能性があります。
+パフォーマンスクリティカルなコードを書く人は、おそらく再帰を避けるべきです。
+
+例えば、この本の著者は、かつて二分木で特定のノードを探す関数を書きました。
+再帰関数としてはかなりスタイリッシュに見えましたが、各関数呼び出しで
+プロローグ／エピローグに追加の時間が費やされたため、反復的（再帰なし）の
+実装よりも数倍遅く動作していました。
+
+\newcommand{\FnFP}{\footnote{LISP、Python、Luaなど}}
+\myindex{\Recursion!Tail recursion}
+
+ところで、これが（再帰が多用される）一部の関数型\ac{PL}\FnFP{}コンパイラが\gls{tail call}を使用する理由です。
+末尾呼び出しについて話すのは、関数がその末尾に配置された自分自身への単一の呼び出しのみを持つ場合です：
+
+\begin{lstlisting}[caption=Scheme{,} 例はWikipediaからコピーペーストしました]
+;; factorial : number -> number
+;; to calculate the product of all positive
+;; integers less than or equal to n.
+(define (factorial n)
+ (if (= n 1)
+     1
+	 (* n (factorial (- n 1)))))
+\end{lstlisting}
+
+末尾呼び出しが重要なのは、コンパイラがこのコードを反復的なものに容易に書き換えて、再帰を取り除くことができるからです。

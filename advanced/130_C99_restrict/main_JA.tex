@@ -1,0 +1,86 @@
+\mysection{C99 restrict}
+\myindex{\CLanguageElements!C99!restrict}
+\myindex{Fortran}
+
+Fortranプログラムが、いくつかの場合で\CCpp プログラムより高速に動作する理由がここにあります。
+
+\begin{lstlisting}[style=customc]
+void f1 (int* x, int* y, int* sum, int* product, int* sum_product, int* update_me, size_t s)
+{
+	for (int i=0; i<s; i++)
+	{
+		sum[i]=x[i]+y[i];
+		product[i]=x[i]*y[i];
+		update_me[i]=i*123; // some dummy value
+		sum_product[i]=sum[i]+product[i];	
+	};
+};
+\end{lstlisting}
+
+これは非常に単純な例で、一つ特別なことがあります：
+\TT{update\_me}配列へのポインタは、\TT{sum}配列、\TT{product}配列、あるいは\TT{sum\_product}配列へのポインタである可能性があります―これを禁止するものは何もありませんよね？
+
+コンパイラはこれを完全に認識しているため、ループ本体に4つのステージを持つコードを生成します：
+\begin{itemize}
+\item 次の\TT{sum[i]}を計算
+\item 次の\TT{product[i]}を計算
+\item 次の\TT{update\_me[i]}を計算
+\item 次の\TT{sum\_product[i]}を計算―このステージでは、すでに計算された\TT{sum[i]}と\TT{product[i]}をメモリからロードする必要があります
+\end{itemize}
+
+最後のステージを最適化することは可能でしょうか？
+すでに\TT{sum[i]}と\TT{product[i]}を計算しているので、それらを再びメモリからロードする必要はありません。
+
+はい、しかしコンパイラは3番目のステージで何も上書きされていないことを確信できません！
+これは「ポインタエイリアシング」と呼ばれ、ポインタが指すメモリが変更されていないことをコンパイラが確信できない状況です。
+
+C99標準の\IT{restrict} \InSqBrackets{\CNineNineStd{} 6.7.3/1}は、このキーワードでマークされた関数引数が常に異なるメモリ位置を指し、決して交差しないというプログラマがコンパイラに与える約束です。
+
+より正確に、そして正式に説明すると、\IT{restrict}は、このポインタのみがオブジェクトにアクセスするために使用され、他のポインタはそれに使用されないことを示します。
+
+\IT{restrict}でマークされている場合、オブジェクトは単一のポインタを介してのみアクセスされると言うこともできます。
+
+各ポインタ引数にこのキーワードを追加してみましょう：
+
+\begin{lstlisting}[style=customc]
+void f2 (int* restrict x, int* restrict y, int* restrict sum, int* restrict product, int* restrict sum_product, 
+	int* restrict update_me, size_t s)
+{
+	for (int i=0; i<s; i++)
+	{
+		sum[i]=x[i]+y[i];
+		product[i]=x[i]*y[i];
+		update_me[i]=i*123; // some dummy value
+		sum_product[i]=sum[i]+product[i];	
+	};
+};
+\end{lstlisting}
+
+結果を見てみましょう：
+
+\lstinputlisting[caption=GCC x64: f1(),style=customasmx86]{\CURPATH/f1_EN.asm}
+
+\lstinputlisting[caption=GCC x64: f2(),style=customasmx86]{\CURPATH/f2_EN.asm}
+
+コンパイルされた\TT{f1()}と\TT{f2()}関数の違いは次のとおりです：
+\TT{f1()}では、\TT{sum[i]}と\TT{product[i]}がループの中間で再ロードされますが、\TT{f2()}ではそのようなことはなく、すでに計算された値が使用されます。これは、ループ本体の実行中に\TT{sum[i]}と\TT{product[i]}の値を誰も何も変更しないことをコンパイラに「約束」したため、メモリから値を再度ロードする必要がないことを「確信」しているからです。
+
+明らかに、2番目の例の方が高速に動作します。
+
+しかし、関数の引数のポインタが何らかの形で交差している場合はどうでしょうか？
+
+これはプログラマの良心にかかっており、結果は不正確になります。
+
+Fortranに戻りましょう。
+
+この プログラミング言語のコンパイラは、すべてのポインタをそのように扱うため、Cで\IT{restrict}を設定できなかった時代、Fortranはこれらの場合により高速なコードを生成することができました。
+
+どの程度実用的でしょうか？
+
+関数が メモリ内のいくつかの大きなブロックを扱う場合です。
+
+例えば、線形代数にはそのようなものがたくさんあります。
+
+スーパーコンピュータ/\ac{HPC}は線形代数で非常に忙しいため、おそらくそれが理由で、伝統的にFortranがまだそこで使用されています [Eugene Loh, \IT{The Ideal HPC Programming Language}, (2010)]。
+
+しかし、反復回数がそれほど多くない場合、確実に速度向上は有意でないかもしれません。

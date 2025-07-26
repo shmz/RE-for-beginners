@@ -1,0 +1,90 @@
+﻿\subsection{ARM}
+
+ARMプロセッサは、他の「純粋な」RISCプロセッサと同様に、除算命令を欠いています。
+また、32ビット定数による乗算のための単一の命令も欠いています（32ビット定数は32ビットオプコードに収まらないことを思い出してください）。
+
+この巧妙なトリック（または\IT{ハック}）を利用することで、加算、減算、ビットシフト（\myref{sec:bitfields}）のみを使用して除算を行うことが可能です。
+
+ここでは、32ビット数を10で割る例を示します。これは
+\InSqBrackets{\ARMCookBook 3.3 Division by a Constant}から取ったものです。
+出力は商と余りから構成されます。
+
+\begin{lstlisting}[style=customasmARM]
+; takes argument in a1
+; returns quotient in a1, remainder in a2
+; cycles could be saved if only divide or remainder is required
+    SUB    a2, a1, #10             ; keep (x-10) for later
+    SUB    a1, a1, a1, lsr #2
+    ADD    a1, a1, a1, lsr #4
+    ADD    a1, a1, a1, lsr #8
+    ADD    a1, a1, a1, lsr #16
+    MOV    a1, a1, lsr #3
+    ADD    a3, a1, a1, asl #2
+    SUBS   a2, a2, a3, asl #1      ; calc (x-10) - (x/10)*10
+    ADDPL  a1, a1, #1              ; fix-up quotient
+    ADDMI  a2, a2, #10             ; fix-up remainder
+    MOV    pc, lr
+\end{lstlisting}
+
+\subsubsection{\OptimizingXcodeIV (\ARMMode)}
+
+\begin{lstlisting}[style=customasmARM]
+__text:00002C58 39 1E 08 E3 E3 18 43 E3  MOV    R1, 0x38E38E39
+__text:00002C60 10 F1 50 E7              SMMUL  R0, R0, R1
+__text:00002C64 C0 10 A0 E1              MOV    R1, R0,ASR#1
+__text:00002C68 A0 0F 81 E0              ADD    R0, R1, R0,LSR#31
+__text:00002C6C 1E FF 2F E1              BX     LR
+\end{lstlisting}
+
+このコードは、最適化するMSVCとGCCが生成するコードとほぼ同じです。
+
+明らかに、LLVMは定数生成に同じアルゴリズムを使用しています。
+
+\myindex{ARM!\Instructions!MOV}
+\myindex{ARM!\Instructions!MOVT}
+
+注意深い読者は、ARMモードでは不可能であるはずなのに、\MOV がどのように32ビット値をレジスタに書き込むのかと疑問に思うかもしれません。
+
+確かに不可能ですが、見ての通り、標準の4バイトではなく命令あたり8バイトがあり、実際には2つの命令があります。
+
+最初の命令は\TT{0x8E39}をレジスタの下位16ビットにロードし、2番目の命令は\TT{MOVT}で、\TT{0x383E}をレジスタの上位16ビットにロード します。
+\IDA はこのようなシーケンスを完全に認識しており、コンパクトさのためにそれらを1つの「疑似命令」に縮小します。
+
+\myindex{ARM!\Instructions!SMMUL}
+\TT{SMMUL}（\IT{Signed Most Significant Word Multiply}）命令は2つの数を符号付き数として扱って乗算し、結果の上位32ビット部分を\Reg{0}レジスタに残し、結果の下位32ビット部分を破棄します。
+
+\myindex{ARM!Optional operators!ASR}
+\TT{\q{MOV R1, R0,ASR\#1}}命令は、1ビット算術右シフトです。
+
+\myindex{ARM!\Instructions!ADD}
+\myindex{ARM!Data processing instructions}
+\myindex{ARM!Optional operators!LSR}
+\TT{\q{ADD R0, R1, R0,LSR\#31}}は$R0=R1 + R0>>31$です。
+
+% FIXME какие именно инструкции? \myref{} ->
+\label{shifts_in_ARM_mode}
+
+ARMモードには独立したシフト命令はありません。
+代わりに、（\MOV、\ADD、\SUB、\TT{RSB}）\footnote{\DataProcessingInstructionsFootNote}などの命令には、2番目のオペランドをシフトする必要があるかどうか、必要な場合はどの値でどのようにシフトするかを示すサフィックスを追加できます。
+\TT{ASR}は\IT{Arithmetic Shift Right}、\TT{LSR}は\IT{Logical Shift Right}を表します。
+
+\subsubsection{\OptimizingXcodeIV (\ThumbTwoMode)}
+
+\begin{lstlisting}[style=customasmARM]
+MOV             R1, 0x38E38E39
+SMMUL.W         R0, R0, R1
+ASRS            R1, R0, #1
+ADD.W           R0, R1, R0,LSR#31
+BX              LR
+\end{lstlisting}
+
+\myindex{ARM!\Instructions!ASRS}
+
+Thumbモードには独立したシフト命令があり、その1つがここで使用されています―\TT{ASRS}（算術右シフト）。
+
+\subsubsection{\NonOptimizing Xcode 4.6.3 (LLVM) and Keil 6/2013}
+
+\NonOptimizing LLVM
+は、このセクションで前に見たコードを生成せず、代わりにライブラリ関数\IT{\_\_\_divsi3}への呼び出しを挿入します。
+
+Keilについては：すべての場合にライブラリ関数\IT{\_\_aeabi\_idivmod}への呼び出しを挿入します。

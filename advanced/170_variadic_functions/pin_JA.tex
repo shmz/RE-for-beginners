@@ -1,0 +1,30 @@
+\subsection{Pinの場合}
+
+\myindex{Pin}
+Pin \ac{DBI}フレームワークのいくつかの関数がどのように引数数を取るかに注目するのは興味深いです：
+
+\begin{lstlisting}[style=customc]
+            INS_InsertPredicatedCall(
+                ins, IPOINT_BEFORE, (AFUNPTR)RecordMemRead,
+                IARG_INST_PTR,
+                IARG_MEMORYOP_EA, memOp,
+                IARG_END);
+\end{lstlisting}
+( \TT{pinatrace.cpp} )
+
+そして、これが\TT{INS\_InsertPredicatedCall()}関数の宣言方法です：
+
+\begin{lstlisting}[style=customc]
+extern VOID INS_InsertPredicatedCall(INS ins, IPOINT ipoint, AFUNPTR funptr, ...);
+\end{lstlisting}
+( \TT{pin\_client.PH} )
+
+したがって、\TT{IARG\_}で始まる名前の定数は、\TT{INS\_InsertPredicatedCall()}内部で処理される関数への何らかの引数です。
+必要な数だけ引数を渡すことができます。
+一部のコマンドには追加の引数があり、一部にはありません。
+引数の完全なリスト：
+\url{https://software.intel.com/sites/landingpage/pintool/docs/58423/Pin/html/group__INST__ARGS.html}。
+そして、引数リストの終了を検出する方法がなければならないため、リストは\TT{IARG\_END}定数で終了する必要があります。これなしでは、関数はローカルスタック内のランダムノイズを追加の引数として扱おうとします。
+
+\index{Python}
+また、[\RobPikePractice]では、Pythonの\IT{pack/unpack}\footnote{\url{https://docs.python.org/3/library/struct.html}}に非常に類似したC/C++ルーチンの素晴らしい例を見つけることができます。

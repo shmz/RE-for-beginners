@@ -1,0 +1,76 @@
+\mysection{ループ：複数のイテレータ}
+\label{loop_iterators}
+
+ほとんどの場合、ループには1つのイテレータしかありませんが、結果のコードには複数存在する可能性があります。
+
+ここに非常に単純な例があります：
+
+\lstinputlisting[style=customc]{\CURPATH/iterators_EN.c}
+
+各反復で2つの乗算があり、これらはコストの高い操作です。
+何らかの方法でこれを最適化できるでしょうか？
+
+はい、両方の配列インデックスが乗算なしで簡単に計算できる値をジャンプしていることに気づけば可能です。
+
+\subsection{3つのイテレータ}
+
+\lstinputlisting[caption=\Optimizing MSVC 2013 x64,style=customasmx86]{\CURPATH/MSVC_2013_x64_Ox_EN.asm}
+
+今度は3つのイテレータがあります：\IT{cnt}変数と2つのインデックスで、
+各反復で12と28ずつ増加します。
+このコードを\CCpp で書き直すことができます：
+
+\lstinputlisting[style=customc]{\CURPATH/iterators3_EN.c}
+
+したがって、1つではなく各反復で3つのイテレータを更新するコストで、
+2つの乗算操作を削除できます。
+
+\subsection{2つのイテレータ}
+
+GCC 4.9はさらに多く行い、2つのイテレータのみを残します：
+
+\lstinputlisting[caption=\Optimizing GCC 4.9 x64,style=customasmx86]{\CURPATH/GCC491_x64_O3_EN.asm}
+
+もはや\IT{counter}変数はありません：GCCはそれが不要であると結論づけました。
+
+\IT{a2}配列の最後の要素はループが始まる前に計算され（これは簡単です：$cnt*7$）、
+これがループを停止する方法です：第2インデックスがこの事前計算された値に達するまで反復するだけです。
+
+シフト／加算／減算を使用した乗算についてここで詳しく読むことができます：
+\myref{multiplication_using_shifts_adds_subs}。
+
+このコードは次のように\CCpp に書き直すことができます：
+
+\lstinputlisting[style=customc]{\CURPATH/iterators2_EN.c}
+
+ARM64用のGCC（Linaro）4.9も同じことを行いますが、\IT{a2}の代わりに\IT{a1}の
+最後のインデックスを事前計算します。これは、もちろん同じ効果があります：
+
+\lstinputlisting[caption=\Optimizing GCC (Linaro) 4.9 ARM64,label=GCC_no_number_sign,style=customasmARM]{\CURPATH/ARM64_GCC_49_O3_EN.s}
+
+% FIXME1 -> post-increment
+
+MIPS用のGCC 4.4.5も同じことを行います：
+
+\lstinputlisting[caption=\Optimizing GCC 4.4.5 for MIPS (IDA),style=customasmMIPS]{\CURPATH/MIPS_O3_IDA_EN.lst}
+
+\subsection{Intel C++ 2011の場合}
+\myindex{\CompilerAnomaly}
+\label{loops_iterators_loop_anomaly}
+
+コンパイラの最適化も奇妙な場合がありますが、それでも正しいものです。
+Intel C++コンパイラ2011が行うことは次のとおりです：
+
+\lstinputlisting[caption=\Optimizing Intel C++ 2011 x64,style=customasmx86]{\CURPATH/intel_2011_x64_Ox.asm}
+
+最初に、いくつかの決定が行われ、次にルーチンの1つが実行されます。
+
+これは配列が交差するかどうかをチェックしているようです。
+
+これはメモリブロックコピールーチンを最適化するよく知られた方法です。
+しかし、コピールーチンは同じです！
+
+これはIntel C++オプティマイザのエラーでしょうが、それでも動作するコードを生成します。
+
+この本でこのような例のコードを意図的に検討しているのは、コンパイラの出力が時々奇妙であることを読者に理解してもらうためですが、
+それでも正しいのです。なぜなら、コンパイラがテストされたとき、テストに合格したからです。

@@ -1,0 +1,34 @@
+\mysection{CRC32計算の例}
+\myindex{CRC32}
+\label{sec:CRC32}
+
+\newcommand{\URLCRCSRC}{\url{http://go.yurichev.com/17327}}
+
+これは非常に人気のあるテーブルベースのCRC32ハッシュ計算
+技法です\footnote{ソースコードはここから取得されました：\URLCRCSRC}。
+
+\lstinputlisting[style=customc]{\CURPATH/CRC.c}
+
+\myindex{\CLanguageElements!for}
+
+私たちは\TT{crc()}関数のみに関心があります。
+ちなみに、\TT{for()}文の2つのループ初期化子に注意してください：\TT{hash=len, i=0}。
+もちろん、\CCpp 標準はこれを許可しています。
+生成されるコードには、1つではなく2つの操作がループ初期化部分に含まれます。
+
+最適化（\Ox）でMSVCでコンパイルしましょう。
+簡潔にするため、\TT{crc()}関数のみを私のコメント付きでここにリストします。
+
+\lstinputlisting[style=customasmx86]{\CURPATH/CRC_2_EN.asm}
+
+\Othree オプションでGCC 4.4.1でも同じことを試してみましょう：
+
+\lstinputlisting[style=customasmx86]{\CURPATH/CRC_gcc_O3_EN.asm}
+
+\myindex{x86!\Instructions!NOP}
+\myindex{x86!\Instructions!LEA}
+
+GCCは\NOP と \TT{lea esi, [esi+0]}を追加することで、
+ループの開始を8バイト境界に整列しました
+（これも\IT{アイドル操作}です）。
+これについての詳細は、npadセクション（\myref{sec:npad}）で読むことができます。

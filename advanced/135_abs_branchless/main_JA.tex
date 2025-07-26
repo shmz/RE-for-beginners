@@ -1,0 +1,48 @@
+\mysection{分岐なし\IT{abs()}関数}
+\label{chap:branchless_abs}
+
+以前に検討した例を再び見て\myref{sec:abs}、x86コードで関数の分岐なしバージョンを作ることが可能かどうか自問してみましょう。
+
+\lstinputlisting[style=customc]{abs.c}
+
+答えはイエスです。
+
+\subsection{\Optimizing GCC 4.9.1 x64}
+
+最適化するGCC 4.9を使ってコンパイルすると見ることができます：
+
+\lstinputlisting[caption=\Optimizing GCC 4.9 x64,style=customasmx86]{\CURPATH/abs_GCC491_x64_O3_EN.asm}
+
+動作原理は次のとおりです：
+
+入力値を31だけ算術右シフトします。
+
+算術シフトは符号拡張を意味するため、\ac{MSB}が1の場合、すべての32ビットが1で埋められ、そうでなければ0で埋められます。
+\myindex{x86!\Instructions!SAR}
+
+つまり、\TT{SAR REG, 31}命令は、符号が負の場合は\TT{0xFFFFFFFF}を、正の場合は0を作ります。
+
+\TT{SAR}の実行後、\EDX にこの値があります。
+\myindex{x86!\Instructions!XOR}
+
+次に、値が\TT{0xFFFFFFFF}（つまり、符号が負）の場合、入力値が反転されます（\TT{XOR REG, 0xFFFFFFFF}は効果的にすべてのビットを反転する操作だからです）。
+
+次に、再び値が\TT{0xFFFFFFFF}（つまり、符号が負）の場合、最終結果に1が加算されます（いくつかの値から$-1$を減算すると、それをインクリメントすることになるからです）。
+
+すべてのビットの反転とインクリメントは、まさに二の補数値の否定方法です：\myref{sec:signednumbers}。
+
+最後の2つの命令は、入力値の符号が負の場合に何かを行うことがわかります。
+
+そうでなければ（符号が正の場合）、入力値をそのままにして何もしません。
+
+このアルゴリズムは\InSqBrackets{\HenryWarren 2-4}で説明されています。
+
+GCCがそれをどのように行ったか、自分で推論したか、既知のものの中から適切なパターンを見つけたかは言い難いです。
+
+\subsection{\Optimizing GCC 4.9 ARM64}
+
+ARM64用のGCC 4.9は大体同じものを生成しますが、完全な64ビットレジスタを使用することにしています。
+
+命令が少なくなっています。なぜなら、個別の命令を使用する代わりに、接尾辞付き命令（\q{asr}）を使用して入力値をシフトできるからです。
+
+\lstinputlisting[caption=\Optimizing GCC 4.9 ARM64,style=customasmARM]{\CURPATH/abs_GCC49_ARM64_O3_EN.s}
