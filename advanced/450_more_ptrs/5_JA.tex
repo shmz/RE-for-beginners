@@ -1,0 +1,50 @@
+\subsection{関数引数としての配列}
+
+関数引数の型を配列として宣言することと、ポインタとして宣言することの違いは何かと疑問に思う人もいるでしょう。
+
+実際には、まったく違いがないと思われます：
+
+\begin{lstlisting}[style=customc]
+void write_something1(int a[16])
+{
+	a[5]=0;
+};
+
+void write_something2(int *a)
+{
+	a[5]=0;
+};
+
+int f()
+{
+	int a[16];
+	write_something1(a);
+	write_something2(a);
+};
+\end{lstlisting}
+
+最適化GCC 4.8.4：
+
+\begin{lstlisting}[style=customasmx86]
+write_something1:
+        mov     DWORD PTR [rdi+20], 0
+        ret
+
+write_something2:
+        mov     DWORD PTR [rdi+20], 0
+        ret
+\end{lstlisting}
+
+しかし、配列のサイズが常に固定である場合、自己文書化の目的でポインタの代わりに配列を宣言することもできます。
+そして、おそらく一部の静的解析ツールはバッファオーバーフローの可能性について警告することができるでしょう。
+それとも、今日のツールでそれは可能でしょうか？
+
+Linus Torvaldsを含む一部の人々は、この\CCpp{}の機能を批判しています：\url{https://lkml.org/lkml/2015/9/3/428}。
+
+C99標準にも\IT{static}キーワードがあります\InSqBrackets{\CNineNineStd{} 6.7.5.3}：
+
+\begin{framed}
+\begin{quotation}
+配列型派生の[ と ]内にキーワードstaticも現れる場合、関数への各呼び出しについて、対応する実引数の値は、サイズ式で指定された要素数以上を持つ配列の最初の要素へのアクセスを提供しなければならない。
+\end{quotation}
+\end{framed}

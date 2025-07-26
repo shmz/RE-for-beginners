@@ -1,0 +1,144 @@
+\mysection{toupper()関数}
+\myindex{\CStandardLibrary!toupper()}
+
+別のとても人気な関数は、必要に応じて文字を小文字から大文字に変換します。
+
+\lstinputlisting[style=customc]{\CURPATH/toupper.c}
+
+\TT{'a'+'A'}式は読みやすくするためにソースコードに残されていますが、もちろんコンパイラによって最適化されます
+\footnote{しかし、厳密に言えば、このような式を最適化できず、そのままコードに残すコンパイラがまだ存在する可能性もあります。}。
+
+\q{a}の\ac{ASCII}コードは97（または0x61）で、\q{A}のコードは65（または0x41）です。
+
+\ac{ASCII}テーブル内での両者の差（または距離）は32（または0x20）です。
+
+理解を深めるために、読者は7ビット標準\ac{ASCII}テーブルを見ることをお勧めします：
+
+\begin{figure}[H]
+\centering
+\includegraphics[width=0.7\textwidth]{ascii.png}
+\caption{Emacsでの7ビット\ac{ASCII}テーブル}
+\end{figure}
+
+\subsection{x64}
+
+\subsubsection{2つの比較操作}
+
+\NonOptimizing MSVCは単純です：コードは入力シンボルが[97..122]範囲（または[`a'..`z']範囲）にあるかをチェックし、もしそうなら32を引きます。
+
+ちょっとしたコンパイラアーティファクトもあります：
+
+\lstinputlisting[caption=\NonOptimizing MSVC 2013 (x64),numbers=left,style=customasmx86]{\CURPATH/MSVC_2013_x64_EN.asm}
+
+入力バイトが3行目で64ビットローカルスタックスロットにロードされることに注意することが重要です。
+
+残りのビット（[8..63]）は手を付けられておらず、つまりいくつかのランダムなノイズを含んでいます（デバッガで見ることができます）。
+
+% TODO add debugger example
+すべての命令はバイトレベルでのみ動作するので、これで問題ありません。
+
+15行目の最後の\TT{MOVZX}命令は、ローカルスタックスロットからバイトを取り、それを\Tint 32ビットデータ型にゼロ拡張します。
+
+\NonOptimizing GCCもほぼ同じことをします：
+
+\lstinputlisting[caption=\NonOptimizing GCC 4.9 (x64),style=customasmx86]{\CURPATH/GCC_49_x64_O0.s}
+
+\subsubsection{1つの比較操作}
+\label{toupper_one_comparison}
+
+\Optimizing MSVCはより良い仕事をし、1つの比較操作だけを生成します：
+
+\lstinputlisting[caption=\Optimizing MSVC 2013 (x64),style=customasmx86]{\CURPATH/MSVC_2013_Ox_x64.asm}
+
+2つの比較操作を1つに置き換える方法については、前に説明しました：\myref{one_comparison_instead_of_two}。
+
+これを\CCpp で書き直してみましょう：
+
+\begin{lstlisting}[style=customc]
+int tmp=c-97;
+
+if (tmp>25)
+        return c;
+else
+        return c-32;
+\end{lstlisting}
+
+\IT{tmp}変数は符号付きでなければなりません。
+
+これにより、変換の場合に2つの減算操作と1つの比較操作ができます。
+
+対照的に、元のアルゴリズムは2つの比較操作と1つの減算を使用します。
+
+\Optimizing GCCはさらに良く、CMOVcc命令を使用してジャンプを除去します（これは良いことです：\myref{branch_predictors}）：
+
+\lstinputlisting[caption=\Optimizing GCC 4.9 (x64),numbers=left,style=customasmx86,label=toupper_GCC_O3]{\CURPATH/GCC_49_x64_O3.s}
+
+3行目でコードは事前に減算された値を準備しており、まるで変換が常に発生するかのようです。
+
+5行目では、変換が必要でない場合、EAXの減算された値が手を付けていない入力値に置き換えられます。
+そしてこの値（もちろん間違っている）が破棄されます。
+
+事前減算は、条件付きジャンプがないことに対してコンパイラが支払う代価です。
+
+\subsection{ARM}
+
+ARM モード用の\Optimizing Keilも1つの比較だけを生成します：
+
+\lstinputlisting[caption=\OptimizingKeilVI (\ARMMode),style=customasmARM]{\CURPATH/Keil_ARM_O3.s}
+
+\myindex{ARM!\Instructions!SUBcc}
+\myindex{ARM!\Instructions!ANDcc}
+SUBLSとANDLS命令は、\Reg{1}の値が0x19より小さい（または等しい）場合にのみ実行されます。
+これらも実際の変換を行います。
+
+Thumbモード用の\Optimizing Keilも1つの比較操作だけを生成します：
+
+\lstinputlisting[caption=\OptimizingKeilVI (\ThumbMode),style=customasmARM]{\CURPATH/Keil_thumb_O3.s}
+
+\myindex{ARM!\Instructions!LSLS}
+\myindex{ARM!\Instructions!LSLR}
+最後の2つのLSLSとLSRS命令は\TT{AND reg, 0xFF}のように動作します：
+これらは\CCpp式$(i<<24)>>24$と等価です。
+
+ThumbモードのKeilは、2つの2バイト命令が0xFF定数をレジスタにロードしてAND命令を実行するコードよりも短いと推論したようです。
+
+\subsubsection{ARM64用GCC}
+
+\lstinputlisting[caption=\NonOptimizing GCC 4.9 (ARM64),style=customasmARM]{\CURPATH/GCC_49_ARM64_O0.s}
+
+\lstinputlisting[caption=\Optimizing GCC 4.9 (ARM64),style=customasmARM]{\CURPATH/GCC_49_ARM64_O3.s}
+
+\subsection{ビット演算の使用}
+\label{toupper_bit}
+
+チェック後に5番目のビット（0番目から数えて）が常に存在するという事実を考えると、減算は単にこの1つのビットをクリアするだけですが、同じ効果はANDing（\myref{AND_OR_as_SUB_ADD}）で達成できます。
+
+さらに簡単に、XORingで：
+
+\lstinputlisting[style=customc]{\CURPATH/toupper2.c}
+
+コードは、最適化されたGCCが前の例（\myref{toupper_GCC_O3}）で生成したものに近いです：
+
+\lstinputlisting[caption=\Optimizing GCC 5.4 (x86),style=customasmx86]{\CURPATH/toupper2_GCC540_x86_O3.s}
+
+\dots しかし\INS{SUB}の代わりに\INS{XOR}が使用されています。
+
+5番目のビットを反転することは、\ac{ASCII}テーブル内の\textit{カーソル}を2行上下に移動するだけです。
+
+小文字/大文字の文字が意図的に\ac{ASCII}テーブルにそのように配置されたと言う人もいます、なぜなら：
+
+\begin{framed}
+\begin{quotation}
+とても古いキーボードは、キーに応じて32または16ビットを単純に切り替えることでShiftを行っていました。これがASCIIにおける小文字と大文字の関係がこれほど規則的で、数字と記号の関係、そしていくつかの記号のペアが目を細めて見るとなんとなく規則的である理由です。
+\end{quotation}
+\end{framed}
+
+（Eric S. Raymond、\url{http://www.catb.org/esr/faqs/things-every-hacker-once-knew/}）
+
+したがって、文字の大文字小文字を単純に反転するこのコードを書くことができます：
+
+\lstinputlisting[style=customc]{\CURPATH/flip_EN.c}
+
+\subsection{まとめ}
+
+これらのコンパイラ最適化はすべて現在とても人気であり、実際のリバースエンジニアは通常このようなコードパターンをよく見かけます。

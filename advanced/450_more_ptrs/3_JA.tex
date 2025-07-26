@@ -1,0 +1,322 @@
+\subsection{Windowsカーネルでのポインタ悪用}
+
+Windows OSのPE実行ファイルのリソースセクションは、画像、アイコン、文字列などを含むセクションです。
+初期のWindowsバージョンではIDによってのみリソースをアドレス指定できましたが、その後Microsoftは文字列を使ってアドレス指定する方法を追加しました。
+
+そのため、IDまたは文字列を
+\href{https://msdn.microsoft.com/en-us/library/windows/desktop/ms648042%28v=vs.85%29.aspx}{FindResource()}関数に渡すことが可能になりました。
+これは次のように宣言されています：
+
+\myindex{win32!FindResource()}
+
+\begin{lstlisting}[style=customc]
+HRSRC WINAPI FindResource(
+  _In_opt_ HMODULE hModule,
+  _In_     LPCTSTR lpName,
+  _In_     LPCTSTR lpType
+);
+\end{lstlisting}
+
+\IT{lpName}と\IT{lpType}は\IT{char*}または\IT{wchar*}型を持ち、まだIDを渡したい人は
+\href{https://msdn.microsoft.com/en-us/library/windows/desktop/ms648029%28v=vs.85%29.aspx}{MAKEINTRESOURCE}マクロを使用する必要があります：
+
+\myindex{win32!MAKEINTRESOURCE()}
+
+\begin{lstlisting}[style=customc]
+result = FindResource(..., MAKEINTRESOURCE(1234), ...);
+\end{lstlisting}
+
+MAKEINTRESOURCEが単に整数をポインタにキャストしているだけというのは興味深い事実です。
+MSVC 2013では、ファイル\\
+\IT{Microsoft SDKs\textbackslash{}Windows\textbackslash{}v7.1A\textbackslash{}Include\textbackslash{}Ks.h}で次のものを見つけることができます：
+
+\begin{lstlisting}[style=customc]
+...
+
+#if (!defined( MAKEINTRESOURCE )) 
+#define MAKEINTRESOURCE( res ) ((ULONG_PTR) (USHORT) res)
+#endif
+
+...
+\end{lstlisting}
+
+狂気に聞こえます。古いリークしたWindows NT4ソースコードを覗いてみましょう。
+\IT{private/windows/base/client/module.c}で\IT{FindResource()}のソースコードを見つけることができます：
+
+\begin{lstlisting}[style=customc]
+HRSRC
+FindResourceA(
+    HMODULE hModule,
+    LPCSTR lpName,
+    LPCSTR lpType
+    )
+
+...
+
+{
+    NTSTATUS Status;
+    ULONG IdPath[ 3 ];
+    PVOID p;
+
+    IdPath[ 0 ] = 0;
+    IdPath[ 1 ] = 0;
+    try {
+        if ((IdPath[ 0 ] = BaseDllMapResourceIdA( lpType )) == -1) {
+            Status = STATUS_INVALID_PARAMETER;
+            }
+        else
+        if ((IdPath[ 1 ] = BaseDllMapResourceIdA( lpName )) == -1) {
+            Status = STATUS_INVALID_PARAMETER;
+...
+\end{lstlisting}
+
+同じソースファイルの\IT{BaseDllMapResourceIdA()}に進みましょう：
+
+\begin{lstlisting}[style=customc]
+ULONG
+BaseDllMapResourceIdA(
+    LPCSTR lpId
+    )
+{
+    NTSTATUS Status;
+    ULONG Id;
+    UNICODE_STRING UnicodeString;
+    ANSI_STRING AnsiString;
+    PWSTR s;
+
+    try {
+        if ((ULONG)lpId & LDR_RESOURCE_ID_NAME_MASK) {
+            if (*lpId == '#') {
+                Status = RtlCharToInteger( lpId+1, 10, &Id );
+                if (!NT_SUCCESS( Status ) || Id & LDR_RESOURCE_ID_NAME_MASK) {
+                    if (NT_SUCCESS( Status )) {
+                        Status = STATUS_INVALID_PARAMETER;
+                        }
+                    BaseSetLastNTError( Status );
+                    Id = (ULONG)-1;
+                    }
+                }
+            else {
+                RtlInitAnsiString( &AnsiString, lpId );
+                Status = RtlAnsiStringToUnicodeString( &UnicodeString,
+                                                       &AnsiString,
+                                                       TRUE
+                                                     );
+                if (!NT_SUCCESS( Status )){
+                    BaseSetLastNTError( Status );
+                    Id = (ULONG)-1;
+                    }
+                else {
+                    s = UnicodeString.Buffer;
+                    while (*s != UNICODE_NULL) {
+                        *s = RtlUpcaseUnicodeChar( *s );
+                        s++;
+                        }
+
+                    Id = (ULONG)UnicodeString.Buffer;
+                    }
+                }
+            }
+        else {
+            Id = (ULONG)lpId;
+            }
+        }
+    except (EXCEPTION_EXECUTE_HANDLER) {
+        BaseSetLastNTError( GetExceptionCode() );
+        Id =  (ULONG)-1;
+        }
+    return Id;
+}
+\end{lstlisting}
+
+\IT{lpId}は\IT{LDR\_RESOURCE\_ID\_NAME\_MASK}とANDされます。これは\IT{public/sdk/inc/ntldr.h}で見つけることができます：
+
+\begin{lstlisting}[style=customc]
+...
+
+#define LDR_RESOURCE_ID_NAME_MASK 0xFFFF0000
+
+...
+\end{lstlisting}
+
+したがって、\IT{lpId}は\IT{0xFFFF0000}とANDされ、最下位16ビット以外に何らかのビットが残っている場合、
+関数の前半が実行されます（\IT{lpId}は文字列のアドレスとして扱われます）。
+そうでなければ---後半（\IT{lpId}は16ビット値として扱われます）。
+
+このコードは、Windows 7のkernel32.dllファイルでまだ見つけることができます：
+
+\begin{lstlisting}[style=customasmx86]
+....
+
+.text:0000000078D24510 ; __int64 __fastcall BaseDllMapResourceIdA(PCSZ SourceString)
+.text:0000000078D24510 BaseDllMapResourceIdA proc near         ; CODE XREF: FindResourceExA+34
+.text:0000000078D24510                                         ; FindResourceExA+4B
+.text:0000000078D24510
+.text:0000000078D24510 var_38          = qword ptr -38h
+.text:0000000078D24510 var_30          = qword ptr -30h
+.text:0000000078D24510 var_28          = _UNICODE_STRING ptr -28h
+.text:0000000078D24510 DestinationString= _STRING ptr -18h
+.text:0000000078D24510 arg_8           = dword ptr  10h
+.text:0000000078D24510
+.text:0000000078D24510 ; FUNCTION CHUNK AT .text:0000000078D42FB4 SIZE 000000D5 BYTES
+.text:0000000078D24510
+.text:0000000078D24510                 push    rbx
+.text:0000000078D24512                 sub     rsp, 50h
+.text:0000000078D24516                 cmp     rcx, 10000h
+.text:0000000078D2451D                 jnb     loc_78D42FB4
+.text:0000000078D24523                 mov     [rsp+58h+var_38], rcx
+.text:0000000078D24528                 jmp     short $+2
+.text:0000000078D2452A ; ---------------------------------------------------------------------------
+.text:0000000078D2452A
+
+.text:0000000078D2452A loc_78D2452A:                           ; CODE XREF: BaseDllMapResourceIdA+18
+.text:0000000078D2452A                                         ; BaseDllMapResourceIdA+1EAD0
+.text:0000000078D2452A                 jmp     short $+2
+.text:0000000078D2452C ; ---------------------------------------------------------------------------
+.text:0000000078D2452C
+
+.text:0000000078D2452C loc_78D2452C:                           ; CODE XREF: BaseDllMapResourceIdA:loc_78D2452A
+.text:0000000078D2452C                                         ; BaseDllMapResourceIdA+1EB74
+.text:0000000078D2452C                 mov     rax, rcx
+.text:0000000078D2452F                 add     rsp, 50h
+.text:0000000078D24533                 pop     rbx
+.text:0000000078D24534                 retn
+.text:0000000078D24534 ; ---------------------------------------------------------------------------
+.text:0000000078D24535                 align 20h
+.text:0000000078D24535 BaseDllMapResourceIdA endp
+
+....
+
+.text:0000000078D42FB4 loc_78D42FB4:                           ; CODE XREF: BaseDllMapResourceIdA+D
+.text:0000000078D42FB4                 cmp     byte ptr [rcx], '#'
+.text:0000000078D42FB7                 jnz     short loc_78D43005
+.text:0000000078D42FB9                 inc     rcx
+.text:0000000078D42FBC                 lea     r8, [rsp+58h+arg_8]
+.text:0000000078D42FC1                 mov     edx, 0Ah
+.text:0000000078D42FC6                 call    cs:__imp_RtlCharToInteger
+.text:0000000078D42FCC                 mov     ecx, [rsp+58h+arg_8]
+.text:0000000078D42FD0                 mov     [rsp+58h+var_38], rcx
+.text:0000000078D42FD5                 test    eax, eax
+.text:0000000078D42FD7                 js      short loc_78D42FE6
+.text:0000000078D42FD9                 test    rcx, 0FFFFFFFFFFFF0000h
+.text:0000000078D42FE0                 jz      loc_78D2452A
+
+....
+
+\end{lstlisting}
+
+入力ポインタの値が0x10000より大きい場合、文字列処理へのジャンプが発生します。
+そうでなければ、\IT{lpId}の入力値がそのまま返されます。
+結局これは64ビットコードなので、\IT{0xFFFF0000}マスクはもはや使用されませんが、それでも\IT{0xFFFFFFFFFFFF0000}がここで動作するでしょう。
+
+注意深い読者は、入力文字列のアドレスが0x10000より低い場合はどうなるのかと疑問に思うかもしれません。
+このコードは、少なくともWin32領域では、Windowsの0x10000より下のアドレスには何もないという事実に依存していました。
+
+Raymond Chenは\href{https://blogs.msdn.microsoft.com/oldnewthing/20130925-00/?p=3123}{これについて書いています}：
+
+\begin{framed}
+\begin{quotation}
+MAKE­INT­RESOURCEはどのように動作するのでしょうか？それは単にポインタの下位16ビットに整数を格納し、上位ビットをゼロのままにします。これは、アドレス空間の最初の64KBが有効なメモリにマップされることがないという慣例に依存しており、この慣例はWindows 7から実施されています。
+\end{quotation}
+\end{framed}
+
+簡潔に言えば、これはダーティハックであり、おそらく本当に必要な場合にのみ使用すべきです。
+おそらく、過去に\IT{FindResource()}関数はその引数に\IT{SHORT}型を持っていて、その後Microsoftはそこに文字列を渡す方法を追加しましたが、古いコードもサポートされなければなりませんでした。
+
+ここに私の短い蒸留された例があります：
+
+\begin{lstlisting}[style=customc]
+#include <stdio.h>
+#include <stdint.h>
+
+void f(char* a)
+{
+	if (((uint64_t)a)>0x10000)
+		printf ("Pointer to string has been passed: %s\n", a);
+	else
+		printf ("16-bit value has been passed: %d\n", (uint64_t)a);
+};
+
+int main()
+{
+	f("Hello!"); // pass string
+	f((char*)1234); // pass 16-bit value
+};
+\end{lstlisting}
+
+これは動作します！
+
+\subsubsection{Linuxカーネルでのポインタ悪用}
+
+\href{https://news.ycombinator.com/item?id=11823647}{Hacker Newsのコメント}で指摘されているように、Linuxカーネルにも似たようなものがあります。
+
+例えば、この関数はエラーコードとポインタの両方を返すことができます：
+
+\begin{lstlisting}[style=customc]
+struct kernfs_node *kernfs_create_link(struct kernfs_node *parent,
+				       const char *name,
+				       struct kernfs_node *target)
+{
+	struct kernfs_node *kn;
+	int error;
+
+	kn = kernfs_new_node(parent, name, S_IFLNK|S_IRWXUGO, KERNFS_LINK);
+	if (!kn)
+		return ERR_PTR(-ENOMEM);
+
+	if (kernfs_ns_enabled(parent))
+		kn->ns = target->ns;
+	kn->symlink.target_kn = target;
+	kernfs_get(target);	/* ref owned by symlink */
+
+	error = kernfs_add_one(kn);
+	if (!error)
+		return kn;
+
+	kernfs_put(kn);
+	return ERR_PTR(error);
+}
+\end{lstlisting}
+
+（\url{https://github.com/torvalds/linux/blob/fceef393a538134f03b778c5d2519e670269342f/fs/kernfs/symlink.c#L25}）
+
+\IT{ERR\_PTR}は整数をポインタにキャストするマクロです：
+
+\begin{lstlisting}[style=customc]
+static inline void * __must_check ERR_PTR(long error)
+{
+	return (void *) error;
+}
+\end{lstlisting}
+
+（\url{https://github.com/torvalds/linux/blob/61d0b5a4b2777dcf5daef245e212b3c1fa8091ca/tools/virtio/linux/err.h}）
+
+このヘッダファイルには、エラーコードをポインタから区別するマクロヘルパーもあります：
+
+\begin{lstlisting}[style=customc]
+#define IS_ERR_VALUE(x) unlikely((x) >= (unsigned long)-MAX_ERRNO)
+\end{lstlisting}
+
+これは、エラーコードが-1に非常に近い「ポインタ」であり、うまくいけば、カーネルメモリの0xFFFFFFFFFFFFFFFF、0xFFFFFFFFFFFFFFFE、0xFFFFFFFFFFFFFFFDなどのアドレスには何もないことを意味します。
+
+より一般的な解決策は、エラーの場合に\IT{NULL}を返し、追加の引数を介してエラーコードを渡すことです。
+Linuxカーネルの作者はそうしませんが、これらの関数を使用するすべての人は、逆参照する前に返されたポインタを常に\IT{IS\_ERR\_VALUE}でチェックしなければならないことを常に覚えておく必要があります。
+
+例：
+
+\begin{lstlisting}[style=customc]
+	fman->cam_offset = fman_muram_alloc(fman->muram, fman->cam_size);
+	if (IS_ERR_VALUE(fman->cam_offset)) {
+		dev_err(fman->dev, "%s: MURAM alloc for DMA CAM failed\n",
+			__func__);
+		return -ENOMEM;
+	}
+\end{lstlisting}
+
+（\url{https://github.com/torvalds/linux/blob/aa00edc1287a693eadc7bc67a3d73555d969b35d/drivers/net/ethernet/freescale/fman/fman.c#L826}）
+
+\subsubsection{UNIXユーザーランドでのポインタ悪用}
+
+\myindex{UNIX!mmap()}
+mmap()関数はエラーの場合に-1を返します（または\TT{MAP\_FAILED}、これは-1に等しい）。
+一部の人々は、mmap()が稀な状況でゼロアドレスにメモリをマップできるため、エラーコードとして0またはNULLを使用できないと言います。

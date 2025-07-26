@@ -1,0 +1,47 @@
+\subsection{参照}
+\myindex{\Cpp!References}
+\label{cpp_references}
+
+\Cpp では、参照もポインタ（\myref{label_pointers}）ですが、それらを扱う際により間違いを犯しにくいため、\IT{安全}と呼ばれています（C++11 8.3.2）。% FIXME link
+
+例えば、参照は常に対応する型のオブジェクトを指している必要があり、NULLにはなりません
+\InSqBrackets{\ParashiftCPPFAQ 8.6}。
+
+さらに、参照は変更できません。それらを別のオブジェクトに向けることは不可能です（再設定）
+\InSqBrackets{\ParashiftCPPFAQ 8.5}。
+
+ポインタを使った例（\myref{label_pointers}）を参照を使うように変更した場合 \dots
+
+\begin{lstlisting}[style=customc]
+void f2 (int x, int y, int & sum, int & product)
+{
+	sum=x+y;
+	product=x*y;
+};
+\end{lstlisting}
+
+\dots すると、コンパイルされたコードはポインタの例（\myref{label_pointers}）とまったく同じであることがわかります：
+
+\begin{lstlisting}[caption=\Optimizing MSVC 2010,style=customasmx86]
+_x$ = 8		; size = 4
+_y$ = 12	; size = 4
+_sum$ = 16	; size = 4
+_product$ = 20	; size = 4
+?f2@@YAXHHAAH0@Z PROC	; f2
+	mov	ecx, DWORD PTR _y$[esp-4]
+	mov	eax, DWORD PTR _x$[esp-4]
+	lea	edx, DWORD PTR [eax+ecx]
+	imul eax, ecx
+	mov ecx, DWORD PTR _product$[esp-4]
+	push esi
+	mov	esi, DWORD PTR _sum$[esp]
+	mov	DWORD PTR [esi], edx
+	mov	DWORD PTR [ecx], eax
+	pop	esi
+	ret	0
+?f2@@YAXHHAAH0@Z ENDP	; f2
+\end{lstlisting}
+
+（\Cpp 関数がこのような奇妙な名前を持つ理由はここで説明されています：\myref{namemangling}。）
+
+したがって、C++の参照は通常のポインタと同じく効率的です。

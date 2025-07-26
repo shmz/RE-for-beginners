@@ -1,0 +1,26 @@
+\subsection{関数へのポインタ}
+
+\CCpp{}で``printf''のように括弧なしの関数名は、\IT{void (*)()} 型の関数へのポインタです。
+関数の内容を読み取りパッチを適用してみましょう：
+
+\lstinputlisting[style=customc]{advanced/450_more_ptrs/6.c}
+
+これは、関数の最初の3バイトが\TT{55 89 e5}であることを示しています。
+実際、これらは\INS{PUSH EBP}と\INS{MOV EBP, ESP}命令のオペコードです（これらはx86オペコードです）。
+しかし、その後プログラムはクラッシュします。なぜなら\IT{text}セクションは読み取り専用だからです。
+
+例を再コンパイルして\IT{text}セクションを書き込み可能にすることができます
+\footnote{\url{http://stackoverflow.com/questions/27581279/make-text-segment-writable-elf}}：
+
+\begin{lstlisting}
+gcc --static -g -Wl,--omagic -o example example.c
+\end{lstlisting}
+
+うまくいきます！
+
+\begin{lstlisting}
+we are in print_something()
+first 3 bytes: 55 89 e5...
+going to call patched print_something():
+it must exit at this point
+\end{lstlisting}

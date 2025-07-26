@@ -1,0 +1,199 @@
+\subsection{ポインタの代わりにアドレスを扱う}
+
+ポインタは単にメモリ内のアドレスです。しかし、なぜ\TT{address string}のような何かの代わりに\TT{char* string}と書くのでしょうか？
+ポインタ変数には、ポインタが指す値の型が提供されます。
+これにより、コンパイラはコンパイル中にデータ型化バグをキャッチできます。
+
+厳密に言えば、プログラミング言語でのデータ型化はすべてバグの防止と自己文書化に関するものです。
+\IT{int}（または\IT{int64\_t}）とbyte---アセンブリ言語プログラマが利用できる唯一の型---の2つのデータ型を使用することが可能です。
+しかし、厄介なバグなしに大きく実用的なアセンブリプログラムを書くのは非常に困難な作業です。
+小さなタイプミスでも見つけにくいバグを引き起こす可能性があります。
+
+データ型情報はコンパイルされたコードには存在しません（そしてこれがデコンパイラの主要な問題の一つです）。
+これをデモンストレーションできます。
+
+これは正常なC/C++プログラマが書けるものです：
+
+\begin{lstlisting}[style=customc]
+#include <stdio.h>
+#include <stdint.h>
+
+void print_string (char *s)
+{
+	printf ("(address: 0x%llx)\n", s);
+	printf ("%s\n", s);
+};
+
+int main()
+{
+	char *s="Hello, world!";
+
+	print_string (s);
+};
+\end{lstlisting}
+
+これは私が書けるものです：
+
+\begin{lstlisting}[style=customc]
+#include <stdio.h>
+#include <stdint.h>
+
+void print_string (uint64_t address)
+{
+	printf ("(address: 0x%llx)\n", address);
+	puts ((char*)address);
+};
+
+int main()
+{
+	char *s="Hello, world!";
+
+	print_string ((uint64_t)s);
+};
+\end{lstlisting}
+
+Linux x64でこの例を実行するため\IT{uint64\_t}を使用します。32ビット\ac{OS}では\IT{int}が動作します。
+最初に、文字へのポインタ（挨拶文字列の最初の文字）が\IT{uint64\_t}にキャストされ、その後渡されます。
+\TT{print\_string()}関数は、受信した\IT{uint64\_t}値を文字へのポインタにキャストバックします。
+
+興味深いのは、GCC 4.8.4が両方のバージョンで同一のアセンブリ出力を生成することです：
+
+\begin{lstlisting}
+gcc 1.c -S -masm=intel -O3 -fno-inline
+\end{lstlisting}
+
+\begin{lstlisting}[style=customasmx86]
+.LC0:
+	.string	"(address: 0x%llx)\n"
+print_string:
+	push	rbx
+	mov	rdx, rdi
+	mov	rbx, rdi
+	mov	esi, OFFSET FLAT:.LC0
+	mov	edi, 1
+	xor	eax, eax
+	call	__printf_chk
+	mov	rdi, rbx
+	pop	rbx
+	jmp	puts
+.LC1:
+	.string	"Hello, world!"
+main:
+	sub	rsp, 8
+	mov	edi, OFFSET FLAT:.LC1
+	call	print_string
+	add	rsp, 8
+	ret
+\end{lstlisting}
+
+（すべての重要でないGCCディレクティブを削除しました。）
+
+UNIX \IT{diff}ユーティリティも試しましたが、違いはまったく示されませんでした。
+
+C/C++プログラミングの伝統を大いに悪用し続けましょう。
+誰かがこれを書くかもしれません：
+
+\begin{lstlisting}[style=customc]
+#include <stdio.h>
+#include <stdint.h>
+
+uint8_t load_byte_at_address (uint8_t* address)
+{
+	return *address;
+	//this is also possible: return address[0]; 
+};
+
+void print_string (char *s)
+{
+	char* current_address=s;
+	while (1)
+	{
+		char current_char=load_byte_at_address(current_address);
+		if (current_char==0)
+			break;
+		printf ("%c", current_char);
+		current_address++;
+	};
+};
+
+int main()
+{
+	char *s="Hello, world!";
+
+	print_string (s);
+};
+\end{lstlisting}
+
+これは次のように書き直すことができます：
+
+\begin{lstlisting}[style=customc]
+#include <stdio.h>
+#include <stdint.h>
+
+uint8_t load_byte_at_address (uint64_t address)
+{
+	return *(uint8_t*)address;
+	//this is also possible: return address[0]; 
+};
+
+void print_string (uint64_t address)
+{
+	uint64_t current_address=address;
+	while (1)
+	{
+		char current_char=load_byte_at_address(current_address);
+		if (current_char==0)
+			break;
+		printf ("%c", current_char);
+		current_address++;
+	};
+};
+
+int main()
+{
+	char *s="Hello, world!";
+
+	print_string ((uint64_t)s);
+};
+\end{lstlisting}
+
+両方のソースコードが同じアセンブリ出力を生成します：
+
+\begin{lstlisting}
+gcc 1.c -S -masm=intel -O3 -fno-inline
+\end{lstlisting}
+
+\begin{lstlisting}[style=customasmx86]
+load_byte_at_address:
+	movzx	eax, BYTE PTR [rdi]
+	ret
+print_string:
+.LFB15:
+	push	rbx
+	mov	rbx, rdi
+	jmp	.L4
+.L7:
+	movsx	edi, al
+	add	rbx, 1
+	call	putchar
+.L4:
+	mov	rdi, rbx
+	call	load_byte_at_address
+	test	al, al
+	jne	.L7
+	pop	rbx
+	ret
+.LC0:
+	.string	"Hello, world!"
+main:
+	sub	rsp, 8
+	mov	edi, OFFSET FLAT:.LC0
+	call	print_string
+	add	rsp, 8
+	ret
+\end{lstlisting}
+
+（すべての重要でないGCCディレクティブも削除しました。）
+
+違いはありません：C/C++ポインタは本質的にアドレスですが、コンパイル時に可能な間違いを防ぐために型情報が提供されています。
+型は実行時にはチェックされません---それは巨大な（そして不要な）オーバーヘッドになるでしょう。

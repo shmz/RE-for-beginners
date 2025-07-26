@@ -1,0 +1,57 @@
+\subsection{値をポインタとして渡す；タグ付き共用体}
+
+値をポインタで渡す方法の例です：
+
+\begin{lstlisting}[label=unsigned_multiply_C,style=customc]
+#include <stdio.h>
+#include <stdint.h>
+
+uint64_t multiply1 (uint64_t a, uint64_t b)
+{
+	return a*b;
+};
+
+uint64_t* multiply2 (uint64_t *a, uint64_t *b)
+{
+	return (uint64_t*)((uint64_t)a*(uint64_t)b);
+};
+
+int main()
+{
+	printf ("%d\n", multiply1(123, 456));
+	printf ("%d\n", (uint64_t)multiply2((uint64_t*)123, (uint64_t*)456));
+};
+\end{lstlisting}
+
+これはスムーズに動作し、GCC 4.8.4はmultiply1()とmultiply2()関数を同一にコンパイルします！
+
+\begin{lstlisting}[label=unsigned_multiply_lst,style=customasmx86]
+multiply1:
+	mov	rax, rdi
+	imul	rax, rsi
+	ret
+
+multiply2:
+	mov	rax, rdi
+	imul	rax, rsi
+	ret
+\end{lstlisting}
+
+ポインタを逆参照しない限り（言い換えると、ポインタに格納されたアドレスからデータを読み取らない限り）、すべて正常に動作します。
+ポインタは通常の変数のように何でも格納できる変数です。
+
+\myindex{x86!\Instructions!MUL}
+\myindex{x86!\Instructions!IMUL}
+符号付き乗算命令（\IMUL）が符号なし乗算命令（\MUL）の代わりに使用されています。詳細については
+\ref{IMUL_over_MUL}を参照してください。
+
+\myindex{Tagged pointers}
+ちなみに、ポインタを少し悪用する\IT{タグ付きポインタ}と呼ばれるよく知られたハックがあります。
+簡単に言えば、すべてのポインタが例えば16バイトのサイズのメモリブロックを指している場合（または常に16バイト境界でアライメントされている場合）、ポインタの最下位4ビットは常にゼロビットであり、このスペースを何らかの方法で使用できます。
+\myindex{LISP}
+これはLISPコンパイラとインタープリターで非常に人気があります。
+彼らはこれらの未使用ビットにセル/オブジェクトタイプを格納し、これによりメモリを節約できます。
+さらに、追加のメモリアクセスなしに、ポインタだけでセル/オブジェクトタイプを判断できます。
+詳細については：\InSqBrackets{\CNotes 1.3}。
+
+% TODO Example of tagged ptrs here

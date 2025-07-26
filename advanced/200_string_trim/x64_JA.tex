@@ -1,0 +1,97 @@
+﻿\subsection{x64: \Optimizing MSVC 2013}
+
+\lstinputlisting[caption=\Optimizing MSVC 2013 x64,style=customasmx86]{\CURPATH/MSVC2013_x64_Ox_EN.asm}
+
+まず、MSVCは\strlen{}関数のコードをインライン化しました。これは、通常の\strlen{}の動作 + それを呼び出し戻ってくるコストよりも高速であると結論付けたからです。
+これはインライン化と呼ばれます：\myref{inline_code}。
+
+\myindex{x86!\Instructions!OR}
+\myindex{\CStandardLibrary!strlen()}
+\label{using_OR_instead_of_MOV}
+インライン化された\strlen{}の最初の命令は\\
+\TT{OR RAX, 0xFFFFFFFFFFFFFFFF}です。
+
+MSVCは、結果のオプコードが短いため、\TT{MOV RAX, 0xFFFFFFFFFFFFFFFF}の代わりに\TT{OR}をよく使用します。
+
+そして、もちろんこれは同等です：すべてのビットが設定されており、すべてのビットが設定された数は二の補数演算で$-1$です：\myref{sec:signednumbers}。
+
+なぜ\strlen{}で$-1$の数が使用されるのかと疑問に思うかもしれません。
+もちろん、最適化のためです。
+MSVCが生成したコードは次のとおりです：
+
+\lstinputlisting[caption=MSVC 2013 x64によるインライン化された\strlen{},style=customasmx86]{\CURPATH/strlen_MSVC_EN.asm}
+
+カウンタを0で初期化したい場合は、より短く書いてみてください！
+OK、試してみましょう：
+
+\lstinputlisting[caption=私たちのバージョンの\strlen{},style=customasmx86]{\CURPATH/my_strlen_EN.asm}
+
+失敗しました。追加の\INS{JMP}命令を使用する必要があります！
+
+そのため、MSVC 2013コンパイラが行ったことは、\TT{INC}命令を実際の文字ロードの前の場所に移動することです。
+
+最初の文字が0の場合、それはOKです。\RAX はこの時点で0なので、結果の文字列長は0です。
+
+この関数の残りの部分は理解しやすいようです。
+
+\subsection{x64: \NonOptimizing GCC 4.9.1}
+
+\lstinputlisting[style=customasmx86]{\CURPATH/GCC491_x64_O0_EN.asm}
+
+コメントは本書の著者によって追加されました。
+
+\strlen{}の実行後、制御はL2ラベルに渡され、そこで2つの節が次々にチェックされます。
+
+\myindex{\CLanguageElements!Short-circuit}
+最初の節（\IT{str\_len==0}）が偽の場合、2番目の節はチェックされません（これは「短絡」です）。
+
+この関数を短い形式で見てみましょう：
+
+\begin{itemize}
+\item 最初のfor()部分（\strlen{}への呼び出し）
+\item goto L2
+\item L5: for()本体。必要に応じてexit
+\item for()の3番目の部分（str\_lenのデクリメント）
+\item L2: 
+for()の2番目の部分：最初の節をチェック、次に2番目をチェック。ループ本体の開始または終了へのgoto
+\item L4: // exit
+\item return s
+\end{itemize}
+
+\subsection{x64: \Optimizing GCC 4.9.1}
+\label{string_trim_GCC_x64_O3}
+
+\lstinputlisting[style=customasmx86]{\CURPATH/GCC491_x64_O3_EN.asm}
+
+今度はより複雑です。
+
+ループ本体の開始前のコードは一度だけ実行されますが、\CRLF{}文字のチェックもあります！
+このコードの重複は何のためでしょうか？
+
+メインループを実装する一般的な方法はおそらく次のとおりです：
+
+\begin{itemize}
+\item （ループ開始）\CRLF{}文字をチェック、決定する
+\item ゼロ文字を格納
+\end{itemize}
+
+しかし、GCCはこれら2つのステップを逆にすることにしました。
+
+もちろん、\IT{ゼロ文字を格納}が最初のステップにはなり得ないため、別のチェックが必要です：
+
+\begin{itemize}
+\item 最初の文字を処理。それを\CRLF{}と一致させ、文字が\CRLF{}でなければ終了
+
+\item （ループ開始）ゼロ文字を格納
+
+\item \CRLF{}文字をチェック、決定する
+\end{itemize}
+
+メインループが非常に短いため、最新の\ac{CPU}には良いことです。
+
+コードはstr\_len変数を使用せず、str\_len-1を使用します。
+そのため、これはバッファ内のインデックスのようなものです。
+
+明らかに、GCCはstr\_len-1文が2回使用されることに気づきます。
+
+そのため、現在の文字列長より1小さい値を常に保持する変数を割り当て、それをデクリメントする方が良いです（これはstr\_len変数をデクリメントするのと同じ効果です）。

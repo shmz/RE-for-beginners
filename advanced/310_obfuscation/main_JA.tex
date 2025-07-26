@@ -1,0 +1,182 @@
+\mysection{難読化}
+
+難読化は、リバースエンジニアからコード（またはその意味）を隠そうとする試みです。
+
+\subsection{テキスト文字列}
+
+（\myref{sec:digging_strings}）で知ったように、テキスト文字列は本当に役立つ場合があります。
+
+これを知っているプログラマは、\IDA{}や任意の16進エディタで文字列を見つけることを不可能にして、それらを隠そうとします。
+
+最も簡単な方法を示します。
+
+文字列を構築する方法：
+
+\begin{lstlisting}[style=customasmx86]
+mov     byte ptr [ebx], 'h'
+mov     byte ptr [ebx+1], 'e'
+mov     byte ptr [ebx+2], 'l'
+mov     byte ptr [ebx+3], 'l'
+mov     byte ptr [ebx+4], 'o'
+mov     byte ptr [ebx+5], ' '
+mov     byte ptr [ebx+6], 'w'
+mov     byte ptr [ebx+7], 'o'
+mov     byte ptr [ebx+8], 'r'
+mov     byte ptr [ebx+9], 'l'
+mov     byte ptr [ebx+10], 'd'
+\end{lstlisting}
+
+文字列は次のように別の文字列と比較することもできます：
+
+\begin{lstlisting}[style=customasmx86]
+mov	ebx, offset username
+cmp	byte ptr [ebx], 'j'
+jnz	fail
+cmp	byte ptr [ebx+1], 'o'
+jnz	fail
+cmp	byte ptr [ebx+2], 'h'
+jnz	fail
+cmp	byte ptr [ebx+3], 'n'
+jnz	fail
+jz	it_is_john
+\end{lstlisting}
+
+どちらの場合も、16進エディタでこれらの文字列を直接見つけることは不可能です。
+
+\myindex{Shellcode}
+
+ちなみに、これはデータセグメントに文字列用のスペースを割り当てることができない場合、例えば\ac{PIC}やシェルコードで文字列を扱う方法です。
+
+別の方法は、構築に\TT{sprintf()}を使用することです：
+
+\begin{lstlisting}[style=customc]
+sprintf(buf, "%s%c%s%c%s", "hel",'l',"o w",'o',"rld");
+\end{lstlisting}
+
+コードは奇妙に見えますが、簡単なアンチリバース対策として、役立つ場合があります。
+
+テキスト文字列は暗号化された形で存在することもあり、その場合すべての文字列使用の前に文字列復号化ルーチンが必要です。
+例：\myref{examples_SCO}。
+
+\subsection{実行可能コード}
+
+\subsubsection{ガベージの挿入}
+
+実行可能コード難読化は、実際のコードの間にランダムなガベージコードを挿入することを意味します。
+これは実行されますが、何も有用なことをしません。
+
+簡単な例：
+
+\begin{lstlisting}[caption=元のコード,style=customasmx86]
+add	eax, ebx
+mul	ecx
+\end{lstlisting}
+
+\lstinputlisting[caption=難読化されたコード,style=customasmx86]{\CURPATH/1_EN.asm}
+
+ここでガベージコードは、実際のコードで使用されていないレジスタ（\TT{ESI}と\TT{EDX}）を使用しています。
+しかし、実際のコードによって生成された中間結果がガベージ命令によって追加の混乱のために使用される場合もあります---なぜだめでしょうか？
+
+\subsubsection{命令を肥大化した等価物に置換}
+
+\begin{itemize}
+\item \TT{MOV op1, op2}は\TT{PUSH op2 / POP op1}ペアに置き換えることができます。
+\item \TT{JMP label}は\TT{PUSH label / RET}ペアに置き換えることができます。
+\IDA{}はラベルへの参照を表示しません。
+\item \TT{CALL label}は以下の3つの命令に置き換えることができます：\\
+\TT{PUSH label\_after\_CALL\_instruction / PUSH label / RET}。
+\item \TT{PUSH op}も以下の命令のペアに置き換えることができます：\\
+\TT{SUB ESP, 4 (または8) / MOV [ESP], op}。%
+
+\end{itemize}
+
+\subsubsection{常に実行される/決して実行されないコード}
+
+開発者がESIがその時点で常に0であることが確信している場合：
+
+\lstinputlisting[style=customasmx86]{\CURPATH/2_EN.asm}
+
+リバースエンジニアはこれを理解するのに時間がかかります。
+
+\myindex{opaque predicate}
+これは\IT{不透明述語}とも呼ばれます。
+
+別の例（そして再び、開発者はESIが常にゼロであることを確信している）：
+
+\lstinputlisting[style=customasmx86]{\CURPATH/3_EN.asm}
+
+\subsubsection{大混乱を作る}
+
+\begin{lstlisting}
+instruction 1
+instruction 2
+instruction 3
+\end{lstlisting}
+
+以下に置き換えることができます：
+
+\begin{lstlisting}[style=customasmx86]
+begin:		jmp	ins1_label
+
+ins2_label:	instruction 2
+		jmp	ins3_label
+
+ins3_label:	instruction 3
+		jmp	exit:
+
+ins1_label:	instruction 1
+		jmp	ins2_label
+exit:
+\end{lstlisting}
+
+\subsubsection{間接ポインタの使用}
+
+\begin{lstlisting}[style=customasmx86]
+dummy_data1	db	100h dup (0)
+message1	db	'hello world',0
+
+dummy_data2	db	200h dup (0)
+message2	db	'another message',0
+
+func		proc
+		...
+		mov	eax, offset dummy_data1 ; PE または ELF reloc here
+		add	eax, 100h
+		push	eax
+		call	dump_string
+		...
+		mov	eax, offset dummy_data2 ; PE または ELF reloc here
+		add	eax, 200h
+		push	eax
+		call	dump_string
+		...
+func		endp
+\end{lstlisting}
+
+\IDA{}は\TT{dummy\_data1}と\TT{dummy\_data2}への参照のみを表示し、テキスト文字列への参照は表示しません。
+
+グローバル変数や関数さえもこのようにアクセスできます。
+
+\subsection{仮想マシン / 疑似コード}
+
+プログラマは独自の\ac{PL}や\ac{ISA}、そしてそのインタープリターを構築することができます。
+
+（5.0以前のVisual Basic、.NETやJavaマシンのように）。
+リバースエンジニアは、\ac{ISA}のすべての命令の意味と詳細を理解するのにいくらか時間を費やす必要があります。
+
+彼/彼女はまた、ある種の逆アセンブラ/デコンパイラを書く必要があります。
+% TODO about obfuscation VMs
+
+\subsection{その他の言及すべきこと}
+
+難読化されたコードを生成するためにTiny Cコンパイラにパッチを当てる私自身の（まだ弱い）試み：\url{http://go.yurichev.com/17220}。
+
+本当に複雑なことに\MOV命令を使用する：
+[Stephen Dolan、\IT{mov is Turing-complete}、(2013)]
+\footnote{\AlsoAvailableAs \url{http://www.cl.cam.ac.uk/~sd601/papers/mov.pdf}}。
+
+\subsection{\Exercise}
+
+\begin{itemize}
+	\item \url{http://challenges.re/29}
+\end{itemize}

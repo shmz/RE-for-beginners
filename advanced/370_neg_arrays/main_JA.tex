@@ -1,0 +1,84 @@
+\mysection{負の配列インデックス}
+\label{negative_array_indices}
+
+負のインデックスを指定することで、配列の\IT{前}の空間をアドレス指定することが可能です。例：$array[-1]$。
+
+\subsection{文字列を末尾からアドレス指定}
+
+\myindex{Python}
+Python \ac{PL}では配列や文字列を末尾からアドレス指定することができます。
+例えば、\IT{string[-1]}は最後の文字を返し、\IT{string[-2]}は最後から2番目を返します。
+信じがたいことですが、これはC/C++でも可能です：
+
+\lstinputlisting[style=customc]{\CURPATH/pythonesque_addressing.c}
+
+これは動作しますが、\textit{s\_end}は常に\textit{s}文字列の末尾にある終端ゼロバイトのアドレスを持つ必要があります。
+\textit{s}文字列のサイズが変更された場合、\textit{s\_end}を更新する必要があります。
+
+このトリックは疑わしいものですが、再び、これは負のインデックスのデモンストレーションです。
+
+\subsection{末尾からブロックの一種をアドレス指定}
+
+まず、スタックがなぜ後方に成長するのかを思い出しましょう（\myref{stack_grow_backwards}）。
+メモリに何らかのブロックがあり、そこにヒープとスタックの両方を格納したいとします。そして、実行時にそれらがどれだけ大きくなるかわからないとします。
+
+\IT{ヒープ}ポインタをブロックの始まりに設定し、
+次に\IT{スタック}ポインタをブロックの終端（\IT{heap + size\_of\_block}）に設定できます。
+そして、\IT{stack[-n]}のようにスタックの\IT{n番目}の要素をアドレス指定できます。
+例えば、1番目の要素には\IT{stack[-1]}、2番目には\IT{stack[-2]}など。
+
+これは、文字列を末尾からアドレス指定するトリックと同じ方法で動作します。
+
+構造体が互いに重複し始めていないかを簡単にチェックできます：
+\IT{ヒープ}の最後の要素のアドレスが\IT{スタック}の最後の要素のアドレスより下にあることを確認するだけです。
+
+残念ながら、インデックスとしての$-0$は動作しません。
+負数を表現する2の補数方式（\myref{sec:signednumbers}）では負のゼロが許可されないため、正のゼロと区別できないからです。
+
+この方法は「Transaction processing」、Jim Gray、1993年、「The Tuple-Oriented File System」章、p. 755でも言及されています。
+
+\subsection{1から始まる配列}
+\label{arrays_at_one}
+
+\myindex{Fortran}
+\myindex{Mathematica}
+FortranとMathematicaは配列の最初の要素を1番目として定義しています。おそらく数学の伝統であるためです。
+\CCpp のような他の\ac{PL}は0番目として定義しています。
+どちらが良いでしょうか？
+\myindex{Edsger W. Dijkstra}
+Edsger W. Dijkstraは後者の方が良いと主張しました
+\footnote{\url{https://www.cs.utexas.edu/users/EWD/transcriptions/EWD08xx/EWD831.html}参照}。
+
+しかし、プログラマはFortranの後の習慣を持っているかもしれないので、この小さなトリックを使用して、\CCpp でインデックス1を使用して最初の要素をアドレス指定することが可能です：
+
+\lstinputlisting[style=customc]{\CURPATH/neg_array.c}
+
+\lstinputlisting[caption=\NonOptimizing MSVC 2010,label=neg_array_c,numbers=left,style=customasmx86]{\CURPATH/neg_array_EN.asm}
+
+10個の要素を持つ\TT{array[]}があり、$0 \ldots 9$バイトで埋められています。
+
+次に、\TT{array[]}の1バイト前を指す\TT{fakearray[]}ポインタがあります。
+
+\TT{fakearray[1]}は正確に\TT{array[0]}を指します。
+しかし、\TT{array[]}の前に何があるかまだ気になります。
+\TT{array[]}の前に\TT{random\_value}を追加し、それを\TT{0x11223344}に設定しました。
+非最適化コンパイラは宣言された順序で変数を割り当てるので、はい、32ビットの\TT{random\_value}は配列の直前にあります。
+
+実行すると：
+
+\begin{lstlisting}
+first element 0
+second element 1
+last element 9
+array[-1]=11, array[-2]=22, array[-3]=33, array[-4]=44
+\end{lstlisting}
+
+\olly のスタックウィンドウからコピーペーストするスタックフラグメントです（作者によってコメントが追加されています）：
+
+\lstinputlisting[caption=\NonOptimizing MSVC 2010]{\CURPATH/stack_EN.txt}
+
+\TT{fakearray[]}へのポインタ（\TT{0x001DFBD3}）は実際に
+スタック内の\TT{array[]}のアドレス（\TT{0x001DFBD4}）ですが、
+1バイト引いたものです。
+
+これはまだ非常にハッキーで疑わしいトリックです。本番コードで使用すべき人はいないでしょうが、デモンストレーションとしては完璧にここに適合します。
