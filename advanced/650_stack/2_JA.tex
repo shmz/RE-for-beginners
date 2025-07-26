@@ -1,0 +1,116 @@
+\subsection{文字列を返す}
+
+これは\RobPikePractice{}からの古典的なバグです：
+
+\begin{lstlisting}[style=customc]
+#include <stdio.h>
+
+char* amsg(int n, char* s)
+{
+        char buf[100];
+
+        sprintf (buf, "error %d: %s\n", n, s) ;
+
+        return buf;
+};
+
+int main()
+{
+        amsg ("%s\n", interim (1234, "something wrong!"));
+};
+\end{lstlisting}
+
+これはクラッシュするでしょう。
+まず、なぜかを理解しましょう。
+
+これはamsg()が戻る前のスタック状態です：
+
+\begin{lstlisting}
+(lower addresses)
+
+[amsg(): 100 bytes]
+[RA]                   <- current SP
+[two amsg arguments]
+[something else]
+[main() local variables]
+
+(upper addresses)
+\end{lstlisting}
+
+amsg()が\main{}に制御を返すとき、ここまでは順調です。
+しかし\main{}から\printf{}が呼び出され、これは自身のニーズのためにスタックを使用し、100バイトバッファを破壊します。
+良くても、ランダムなゴミが印刷されます。
+
+信じがたいことですが、この問題を修正する方法を知っています：
+
+\begin{lstlisting}[style=customc]
+#include <stdio.h>
+
+char* amsg(int n, char* s)
+{
+        char buf[100];
+
+        sprintf (buf, "error %d: %s\n", n, s) ;
+
+        return buf;
+};
+
+char* interim (int n, char* s)
+{
+        char large_buf[8000];
+        // make use of local array.
+        // it will be optimized away otherwise, as useless.
+        large_buf[0]=0;
+        return amsg (n, s);
+};
+
+int main()
+{
+        printf ("%s\n", interim (1234, "something wrong!"));
+};
+\end{lstlisting}
+
+最適化なしで、\TT{/GS-}オプション\footnote{バッファセキュリティチェックを無効にする}を付けてMSVC 2013でコンパイルすると動作します。
+MSVCは警告します：``warning C4172: returning address of local variable or temporary''、しかしコードは実行され、メッセージが印刷されます。
+amsg()がinterim()に制御を返す瞬間のスタック状態を見てみましょう：
+
+\begin{lstlisting}
+(lower addresses)
+
+[amsg(): 100 bytes]
+[RA]                                     <- current SP
+[two amsg() arguments]
+[interim() stuff, incl. 8000 bytes]
+[something else]
+[main() local variables]
+
+(upper addresses)
+\end{lstlisting}
+
+interim()が\main{}に制御を返す瞬間のスタック状態：
+
+\begin{lstlisting}
+(lower addresses)
+
+[amsg(): 100 bytes]
+[RA]
+[two amsg() arguments]
+[interim() stuff, incl. 8000 bytes]
+[something else]                         <- current SP
+[main() local variables]
+
+(upper addresses)
+\end{lstlisting}
+
+\main{}が\printf{}を呼び出すとき、interim()のバッファが割り当てられていた場所でスタックを使用し、
+内部にエラーメッセージを持つ100バイトを破壊しません。なぜなら8000バイト（またはそれより少ない）が\printf{}や他の下位関数が行うすべてに十分だからです！
+
+次のような多くの関数がある場合にも動作するかもしれません：
+\main{} $\rightarrow$ f1() $\rightarrow$ f2() $\rightarrow$ f3() \dots{} $\rightarrow$ amsg()、
+そしてamsg()の結果が\main{}で使用される場合。
+\main{}の\ac{SP}と\TT{buf[]}のアドレスの間の距離は十分長くなければなりません。
+
+これが、このようなバグが危険な理由です：時々コードは動作し（バグが気付かれずに隠れる可能性があります）、時々動作しません。
+\label{heisenbug}
+\myindex{Heisenbug}
+このようなバグは冗談でハイゼンバグまたはシュレディンバグ\footnote{\url{https://en.wikipedia.org/wiki/Heisenbug}}と呼ばれます。

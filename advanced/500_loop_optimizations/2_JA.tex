@@ -1,0 +1,120 @@
+\subsection{別のループ最適化}
+
+グローバルメモリに配置されたいくつかの配列のすべての要素を処理する場合、コンパイラはそれを最適化できます。
+例えば、128個の\IT{int}の配列のすべての要素の合計を計算してみましょう：
+
+\begin{lstlisting}[style=customc]
+#include <stdio.h>
+
+int a[128];
+
+int sum_of_a()
+{
+	int rt=0;
+	
+	for (int i=0; i<128; i++)
+		rt=rt+a[i];
+
+	return rt;
+};
+
+int main()
+{
+	// initialize
+	for (int i=0; i<128; i++)
+		a[i]=i;
+	
+	// calculate the sum
+	printf ("%d\n", sum_of_a());
+};
+\end{lstlisting}
+
+最適化GCC 5.3.1（x86）は次のようになります（\IDA）：
+
+\begin{lstlisting}[style=customasmx86]
+.text:080484B0 sum_of_a        proc near
+.text:080484B0                 mov     edx, offset a
+.text:080484B5                 xor     eax, eax
+.text:080484B7                 mov     esi, esi
+.text:080484B9                 lea     edi, [edi+0]
+.text:080484C0
+.text:080484C0 loc_80484C0:            ; CODE XREF: sum_of_a+1B
+.text:080484C0                 add     eax, [edx]
+.text:080484C2                 add     edx, 4
+.text:080484C5                 cmp     edx, offset __libc_start_main@@GLIBC_2_0
+.text:080484CB                 jnz     short loc_80484C0
+.text:080484CD                 rep retn
+.text:080484CD sum_of_a        endp
+.text:080484CD
+
+...
+
+.bss:0804A040                 public a
+.bss:0804A040 a               dd 80h dup(?) ; DATA XREF: main:loc_8048338
+.bss:0804A040                               ; main+19
+.bss:0804A040 _bss            ends
+.bss:0804A040
+extern:0804A240 ; ===========================================================================
+extern:0804A240
+extern:0804A240 ; Segment type: Externs
+extern:0804A240 ; extern
+extern:0804A240                 extrn __libc_start_main@@GLIBC_2_0:near
+extern:0804A240                            ; DATA XREF: main+25
+extern:0804A240                            ; main+5D
+extern:0804A244                 extrn __printf_chk@@GLIBC_2_3_4:near
+extern:0804A248                 extrn __libc_start_main:near
+extern:0804A248                            ; CODE XREF: ___libc_start_main
+extern:0804A248                            ; DATA XREF: .got.plt:off_804A00C
+\end{lstlisting}
+
+\TT{0x080484C5}の\TT{\_\_libc\_start\_main@@GLIBC\_2\_0}は何でしょうか？
+これは\TT{a[]}配列の終端の直後のラベルです。
+関数は次のように書き直すことができます：
+
+\begin{lstlisting}[style=customc]
+int sum_of_a_v2()
+{
+	int *tmp=a;
+	int rt=0;
+	
+	do
+	{
+		rt=rt+(*tmp);
+		tmp++;
+	}
+	while (tmp<(a+128));
+
+	return rt;
+};
+\end{lstlisting}
+
+最初のバージョンは\IT{i}カウンタを持ち、配列の各要素のアドレスは各反復で計算されます。
+2番目のバージョンはより最適化されています：配列の各要素へのポインタは常に準備されており、各反復で4バイト前方にスライドします。
+ループが終了したかどうかをどうやって確認するのでしょうか？
+ポインタを配列の終端の直後のアドレスと比較するだけです。これは我々の場合、Glibc 2.0からインポートされた\TT{\_\_libc\_start\_main()}関数のアドレスと偶然一致します。
+時々このようなコードは混乱を招きますが、これは非常に人気のある最適化技法なので、私がこの例を作りました。
+
+私の2番目のバージョンはGCCが行ったことに非常に近く、コンパイルすると、コードは最初のバージョンとほぼ同じですが、最初の2つの命令が入れ替わっています：
+
+\begin{lstlisting}[style=customasmx86]
+.text:080484D0                 public sum_of_a_v2
+.text:080484D0 sum_of_a_v2     proc near
+.text:080484D0                 xor     eax, eax
+.text:080484D2                 mov     edx, offset a
+.text:080484D7                 mov     esi, esi
+.text:080484D9                 lea     edi, [edi+0]
+.text:080484E0
+.text:080484E0 loc_80484E0:            ; CODE XREF: sum_of_a_v2+1B
+.text:080484E0                 add     eax, [edx]
+.text:080484E2                 add     edx, 4
+.text:080484E5                 cmp     edx, offset __libc_start_main@@GLIBC_2_0
+.text:080484EB                 jnz     short loc_80484E0
+.text:080484ED                 rep retn
+.text:080484ED sum_of_a_v2     endp
+\end{lstlisting}
+
+言うまでもなく、この最適化は、コンパイラがコンパイル時に配列の終端のアドレスを計算できる場合にのみ可能です。
+これは、配列がグローバルでサイズが固定の場合に発生します。
+
+しかし、配列のアドレスがコンパイル中に不明だが、サイズが固定の場合、配列の終端の直後のラベルのアドレスは、ループの開始時に計算できます。
+% FIXME <!-- \ref{} to example -->

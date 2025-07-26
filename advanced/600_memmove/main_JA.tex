@@ -1,0 +1,84 @@
+\mysection{memmove()とmemcpy()}
+\label{memmove_and_DF}
+\myindex{\CStandardLibrary!memmove()}
+\myindex{\CStandardLibrary!memcpy()}
+
+これらの標準関数の違いは、\IT{memcpy()}がブロックを別の場所に盲目的にコピーするのに対し、
+\IT{memmove()}は重複するブロックを正しく処理することです。
+例えば、文字列を2バイト前方に引っ張りたい場合：
+
+% TODO TikZ
+\begin{lstlisting}
+`|.|.|h|e|l|l|o|...` -> `|h|e|l|l|o|...`
+\end{lstlisting}
+
+32ビットまたは64ビットワードを一度にコピーする\IT{memcpy()}、またはさらに\ac{SIMD}は、
+ここでは明らかに失敗します。代わりにバイト単位のコピールーチンを使用する必要があります。
+
+さらに高度な例として、文字列の前に2バイトを挿入する場合：
+
+\begin{lstlisting}
+`|h|e|l|l|o|...` -> `|.|.|h|e|l|l|o|...`
+\end{lstlisting}
+
+今度はバイト単位のメモリコピールーチンでさえ失敗します。最後からバイトをコピーする必要があります。
+
+\myindex{x86!\Registers!DF}
+これは\INS{REP MOVSB}命令の前に\TT{DF} x86フラグを設定すべき稀なケースです：
+\TT{DF}は方向を定義し、今度は逆方向に移動する必要があります。
+
+典型的な\IT{memmove()}ルーチンはこのように動作します：
+1) ソースが宛先より下にある場合、前方にコピーします；
+2) ソースが宛先より上にある場合、後方にコピーします。
+
+\myindex{uClibc}
+これはuClibcの\IT{memmove()}です：
+
+\begin{lstlisting}[style=customc]
+void *memmove(void *dest, const void *src, size_t n)
+{
+	int eax, ecx, esi, edi;
+	__asm__ __volatile__(
+		"	movl	%%eax, %%edi\n"
+		"	cmpl	%%esi, %%eax\n"
+		"	je	2f\n" /* (optional) src == dest -> NOP */
+		"	jb	1f\n" /* src > dest -> simple copy */
+		"	leal	-1(%%esi,%%ecx), %%esi\n"
+		"	leal	-1(%%eax,%%ecx), %%edi\n"
+		"	std\n"
+		"1:	rep; movsb\n"
+		"	cld\n"
+		"2:\n"
+		: "=&c" (ecx), "=&S" (esi), "=&a" (eax), "=&D" (edi)
+		: "0" (n), "1" (src), "2" (dest)
+		: "memory"
+	);
+	return (void*)eax;
+}
+\end{lstlisting}
+
+最初のケースでは、\INS{REP MOVSB}は\TT{DF}フラグがクリアされた状態で呼び出されます。
+2番目では、\TT{DF}が設定され、その後クリアされます。
+
+より複雑なアルゴリズムには次の部分があります：
+
+\q{\IT{source}と\IT{destination}の間の差が\gls{word}の幅より大きい場合、
+バイトではなくワードを使用してコピーし、非整列部分をコピーするためにバイト単位のコピーを使用する}。
+
+\myindex{Glibc}
+これはGlibc 2.24の非最適化C部分での動作です。
+
+これらすべてを考慮すると、\IT{memmove()}は\IT{memcpy()}より遅い場合があります。
+しかし、Linus Torvaldsを含む一部の人々は\footnote{\url{https://bugzilla.redhat.com/show_bug.cgi?id=638477\#c132}}、
+\IT{memcpy()}は\IT{memmove()}のエイリアス（または同義語）であるべきであり、後者の
+関数は開始時にバッファが重複しているかどうかをチェックし、その後\IT{memcpy()}または\IT{memmove()}として動作すべきだと主張しています。
+現在、重複するバッファのチェックは結局のところ非常に安価です。
+
+\subsection{アンチデバッグトリック}
+
+\TT{DF}を設定してプロセスをクラッシュさせるアンチデバッグトリックについて聞いたことがあります：次の\IT{memcpy()}
+ルーチンは逆方向にコピーするため、クラッシュにつながります。
+しかし、これを確認することはできません：すべてのメモリコピールーチンは必要に応じて\TT{DF}をクリア/設定するようです。
+一方、ここで引用したuClibcの\IT{memmove()}は、
+\TT{DF}の明示的なクリアがありません（\TT{DF}は常にクリアされていると仮定している？）ので、
+実際にクラッシュする可能性があります。

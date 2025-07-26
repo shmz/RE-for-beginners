@@ -1,0 +1,37 @@
+% TODO translate
+\mysection{別のハイゼンバグ}
+
+時々、配列（またはバッファ）は\IT{fencepost error}により溢れることがあります：
+
+\lstinputlisting[style=customc]{advanced/750_heisenbug/1.c}
+
+このプログラムが私の場合に印刷したもの（非最適化GCC 5.4 x86 on Linux）：
+
+\begin{lstlisting}
+important_var1=1
+important_var2=456
+important_var3=3
+important_var4=4
+important_var5=5
+\end{lstlisting}
+
+たまたま、\TT{important\_var2}がコンパイラによって\TT{array1[]}の直後に配置されました：
+
+\begin{lstlisting}[caption=objdump -x]
+0804a040 g     O .bss   00000200              array1
+...
+0804a240 g     O .bss   00000004              important_var2
+0804a244 g     O .bss   00000004              important_var4
+...
+0804a248 g     O .bss   00000004              important_var1
+0804a24c g     O .bss   00000004              important_var3
+0804a250 g     O .bss   00000004              important_var5
+\end{lstlisting}
+
+他のコンパイラは変数を別の順序で配置する可能性があり、別の変数が破壊されるでしょう。
+\myindex{Heisenbug}
+これも\textit{ハイゼンバグ}（\myref{heisenbug}）です---バグはコンパイラのバージョンや最適化スイッチによって現れたり、気付かれずに残ったりする可能性があります。
+
+\myindex{Valgrind}
+すべての変数と配列がローカルスタックに割り当てられている場合、スタック保護がトリガーされる場合もあれば、されない場合もあります。
+しかし、Valgrindはこのようなバグを見つけることができます。

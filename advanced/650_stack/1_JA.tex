@@ -1,0 +1,113 @@
+\subsection{呼び出し元の引数/ローカル変数へのアクセス}
+
+C/C++の基本から、関数が呼び出し元関数の引数やそのローカル変数にアクセスすることは不可能だということを知っています。
+
+それでも、汚いハックを使えば可能です。
+例えば：
+
+\begin{lstlisting}[style=customc]
+#include <stdio.h>
+
+void f(char *text)
+{
+	// print stack
+	int *tmp=&text;
+	for (int i=0; i<20; i++)
+	{
+		printf ("0x%x\n", *tmp);
+		tmp++;
+	};
+};
+
+void draw_text(int X, int Y, char* text)
+{
+	f(text);
+
+	printf ("We are going to draw [%s] at %d:%d\n", text, X, Y);
+};
+
+int main()
+{
+	printf ("address of main()=0x%x\n", &main);
+	printf ("address of draw_text()=0x%x\n", &draw_text);
+	draw_text(100, 200, "Hello!");
+};
+\end{lstlisting}
+
+32ビットUbuntu 16.04とGCC 5.4.0で、次のような結果を得ました：
+
+\begin{lstlisting}
+address of main()=0x80484f8
+address of draw_text()=0x80484cb
+0x8048645	first argument to f()
+0x8048628
+0xbfd8ab98
+0xb7634590
+0xb779eddc
+0xb77e4918
+0xbfd8aba8
+0x8048547	return address into the middle of main()
+0x64		first argument to draw_text()
+0xc8		second argument to draw_text()
+0x8048645	third argument to draw_text()
+0x8048581
+0xb779d3dc
+0xbfd8abc0
+0x0
+0xb7603637
+0xb779d000
+0xb779d000
+0x0
+0xb7603637
+\end{lstlisting}
+
+（コメントは私のものです。）
+
+\IT{f()}はその最初の引数からスタック要素の列挙を開始するため、最初のスタック要素は確かに\q{Hello!}文字列へのポインタです。そのアドレスが\IT{draw\_text()}関数の3番目の引数としても使用されているのがわかります。
+
+\IT{f()}では、正確なスタックレイアウトがわかれば、すべての関数引数とローカル変数を読み取ることができますが、それは常に変わり、コンパイラごとに異なります。
+さまざまな最適化レベルがスタックレイアウトに大きく影響します。
+
+しかし、必要な情報を何らかの方法で検出できれば、それを使用して変更することもできます。
+例として、\IT{f()}関数を作り直します：
+
+\begin{lstlisting}[style=customc]
+void f(char *text)
+{
+	...
+
+	// find 100, 200 values pair and modify the second on
+	tmp=&text;
+	for (int i=0; i<20; i++)
+	{
+		if (*tmp==100 && *(tmp+1)==200)
+		{
+			printf ("found\n");
+			*(tmp+1)=210; // change 200 to 210
+			break;
+		};
+		tmp++;
+	};
+};
+\end{lstlisting}
+
+まさか、動作します：
+
+\begin{lstlisting}
+found
+We are going to draw [Hello!] at 100:210
+\end{lstlisting}
+
+\myparagraph{まとめ}
+
+これは極めて汚いハックで、スタック内部を実演するためのものです。
+実際のコードでこれを使用した人を見たり聞いたりしたことはありません。
+それでも、これは良い例です。
+
+\myparagraph{\Exercise}
+
+この例は、GCC 5.4.0を使用して32ビットUbuntuで最適化なしでコンパイルされ、動作します。
+しかし、\TT{-O3}最大最適化を有効にすると、失敗します。
+なぜか見つけてみてください。
+
+お気に入りのコンパイラとOSを使用し、さまざまな最適化レベルを試し、動作するかどうか、動作しない場合はなぜかを見つけてください。

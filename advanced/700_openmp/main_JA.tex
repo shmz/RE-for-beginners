@@ -1,0 +1,182 @@
+\mysection{OpenMP}
+\label{openmp}
+\myindex{OpenMP}
+
+OpenMPは、単純なアルゴリズムを並列化する最も簡単な方法の一つです。
+
+\myindex{Bitcoin}
+
+例として、暗号学的\IT{nonce}を計算するプログラムを構築してみましょう。
+
+私の簡単な例では、
+\IT{nonce}は特定の特徴を持つハッシュを生成するために、平文の暗号化されていないテキストに追加される数値です。
+
+例えば、Bitcoinプロトコルのある段階では、結果のハッシュが特定の数の連続するゼロを含むような\IT{nonce}を見つけることが要求されます。
+これは\q{proof of work}とも呼ばれます
+\footnote{\href{http://go.yurichev.com/17101}{wikipedia}}
+（つまり、システムが集約的な計算を行い、そのために時間を費やしたことを証明します）。
+
+\myindex{SHA512}
+私の例はBitcoinとは何の関係もありません。
+\q{hello, world!\_}文字列に数値を追加して、
+\q{hello, world!\_<number>}がSHA512アルゴリズムでハッシュ化されたときに、少なくとも3つのゼロバイトを含むような数値を見つけようとします。
+
+ブルートフォースを0..INT32\_MAX-1の間隔に制限します（つまり、\TT{0x7FFFFFFE}または2147483646）。
+
+アルゴリズムは非常に簡単です：
+
+\lstinputlisting[style=customc]{advanced/700_openmp/openmp_example.c}
+
+\TT{check\_nonce()}関数は、文字列に数値を追加し、
+SHA512アルゴリズムでハッシュ化し、結果内の3つのゼロバイトをチェックします。
+
+コードの非常に重要な部分は次のとおりです：
+
+\begin{lstlisting}[style=customc]
+	#pragma omp parallel for
+	for (i=0; i<INT32_MAX; i++)
+		check_nonce (i);
+\end{lstlisting}
+
+はい、それだけ簡単です。\TT{\#pragma}なしでは、
+0から\TT{INT32\_MAX}（\TT{0x7fffffff}または2147483647）までの各数値に対して\TT{check\_nonce()}を呼び出すだけです。
+\TT{\#pragma}があると、コンパイラはループ間隔をより小さなものに分割し、
+利用可能なすべての\ac{CPU}コア上で実行するための特別なコードを追加します
+\footnote{注意：これは意図的に最も簡単な例ですが、実際には、OpenMPの使用はより困難で複雑になる可能性があります}。
+
+例をコンパイルできます
+\footnote{sha512.(c|h)とu64.hファイルはOpenSSLライブラリから取得できます：
+\url{http://go.yurichev.com/17324}}
+MSVC 2012で：
+% FIXME1: \footnote{other source code files can be downloaded here: ...} 
+
+\begin{lstlisting}
+cl openmp_example.c sha512.obj /openmp /O1 /Zi /Faopenmp_example.asm
+\end{lstlisting}
+
+またはGCCで：
+
+\begin{lstlisting}
+gcc -fopenmp 2.c sha512.c -S -masm=intel
+\end{lstlisting}
+
+\subsection{MSVC}
+
+MSVC 2012がメインループを生成する方法は次のとおりです：
+
+\lstinputlisting[caption=MSVC 2012,style=customasmx86]{advanced/700_openmp/MSVC_loop.asm}
+
+\TT{vcomp}で始まるすべての関数は
+OpenMP関連で、vcomp*.dllファイルに格納されています。
+ここでスレッドのグループが開始されます。
+
+\TT{\_main\$omp\$1}を見てみましょう：
+
+\lstinputlisting[caption=MSVC 2012,style=customasmx86]{advanced/700_openmp/MSVC_1.asm}
+
+この関数は$n$回並列で開始されます。ここで$n$は\ac{CPU}コア数です。\\
+\TT{vcomp\_for\_static\_simple\_init()}は
+現在のスレッド番号に応じて、現在のスレッドのfor()構造の間隔を計算します。
+
+ループの開始値と終了値は\TT{\$T1}と\TT{\$T2}ローカル変数に格納されます。
+\TT{vcomp\_for\_static\_simple\_init()}関数への引数として\TT{7ffffffeh}（または2147483646）も見ることができます
+---これは、均等に分割される全体のループの繰り返し数です。
+
+その後、\TT{check\_nonce()}関数への呼び出しがある新しいループが見えます。これがすべての作業を行います。
+
+統計を収集するために、\TT{check\_nonce()}関数の呼び出しについて、関数が呼び出された引数について
+\TT{check\_nonce()}関数の最初にコードを追加してみましょう。
+
+実行すると次のようになります：
+
+\begin{lstlisting}
+threads=4
+...
+checked=2800000
+checked=3000000
+checked=3200000
+checked=3300000
+found (thread 3): [hello, world!_1611446522]. seconds spent=3
+__min[0]=0x00000000 __max[0]=0x1fffffff
+__min[1]=0x20000000 __max[1]=0x3fffffff
+__min[2]=0x40000000 __max[2]=0x5fffffff
+__min[3]=0x60000000 __max[3]=0x7ffffffe
+\end{lstlisting}
+
+はい、結果は正しく、最初の3バイトはゼロです：
+
+\begin{lstlisting}
+C:\...\sha512sum test
+000000f4a8fac5a4ed38794da4c1e39f54279ad5d9bb3c5465cdf57adaf60403
+df6e3fe6019f5764fc9975e505a7395fed780fee50eb38dd4c0279cb114672e2 *test
+\end{lstlisting}
+
+実行時間は4コアIntel Xeon E3-1220 3.10 GHzで約2..3秒です。
+タスクマネージャでは5つのスレッドが見えます：
+1つのメインスレッド + 4つの追加。
+この例を小さく明確に保つために、さらなる最適化は行われていません。
+しかし、おそらくもっと速くできるでしょう。
+私の\ac{CPU}は4コアを持っているため、OpenMPは正確に4つのスレッドを開始しました。
+
+統計表を見ることで、ループが4つの均等な部分にどのように分割されたかが明確にわかります。
+ああ、まあ、最後のビットを考慮しなければほぼ均等です。
+
+\glslink{atomic operation}{atomic operations}のためのプラグマもあります。
+
+このコードがどのようにコンパイルされるか見てみましょう：
+
+\begin{lstlisting}[style=customc]
+	#pragma omp atomic
+	checked++;
+
+	#pragma omp critical
+	if ((checked % 100000)==0)
+		printf ("checked=%d\n", checked);
+\end{lstlisting}
+
+\lstinputlisting[caption=MSVC 2012,style=customasmx86]{advanced/700_openmp/MSVC_2.asm}
+
+結局のところ、vcomp*.dllの\TT{vcomp\_atomic\_add\_i4()}関数は、
+\TT{LOCK XADD}命令\footnote{
+LOCKプレフィックスについて詳しく読む：\myref{x86_lock}}を持つ小さな関数です。
+
+\TT{vcomp\_enter\_critsect()}は
+最終的にwin32 \ac{API}関数\\
+\TT{EnterCriticalSection()}を呼び出します
+\footnote{クリティカルセクションについて詳しく読める場所：\myref{critical_sections}}。
+
+\subsection{GCC}
+
+GCC 4.8.1は
+まったく同じ統計表を表示するプログラムを生成します。
+
+そのため、GCCの実装は同じ方法でループを部分に分割します。
+
+\begin{lstlisting}[caption=GCC 4.8.1,style=customasmx86]
+	mov	edi, OFFSET FLAT:main._omp_fn.0
+	call	GOMP_parallel_start
+	mov	edi, 0
+	call	main._omp_fn.0
+	call	GOMP_parallel_end
+\end{lstlisting}
+
+MSVCの実装とは異なり、GCCのコードは3つのスレッドを開始し、
+4番目を現在のスレッドで実行します。そのため、MSVCの5つではなく4つのスレッドです。
+
+\TT{main.\_omp\_fn.0}関数は次のとおりです：
+ 
+\lstinputlisting[caption=GCC 4.8.1,style=customasmx86]{advanced/700_openmp/GCC_1.asm}
+
+ここで分割が明確に見えます：\TT{omp\_get\_num\_threads()}と\TT{omp\_get\_thread\_num()}を呼び出すことで
+
+実行中のスレッド数と現在のスレッド番号を取得し、その後ループの間隔を決定します。
+その後、\TT{check\_nonce()}を実行します。
+
+GCCは、別のDLL関数への呼び出しを生成するMSVCとは異なり、
+\TT{LOCK ADD}命令をコードに直接挿入しました：
+
+\lstinputlisting[caption=GCC 4.8.1,style=customasmx86]{advanced/700_openmp/GCC_2.asm}
+
+GOMPプレフィックスを持つ関数はGNU OpenMPライブラリからのものです。
+vcomp*.dllとは異なり、そのソースコードは自由に利用できます：
+\href{http://go.yurichev.com/17102}{GitHub}。

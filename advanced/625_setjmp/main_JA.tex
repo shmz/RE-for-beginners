@@ -1,0 +1,88 @@
+\mysection{setjmp/longjmp}
+
+\myindex{\CStandardLibrary!setjmp}
+\myindex{\CStandardLibrary!longjmp}
+
+setjmp/longjmpは、C++や他の高級\ac{PL}のthrow/catchメカニズムに非常によく似たCのメカニズムです。
+\myindex{zlib}
+zlibからの例を示します：
+
+\begin{lstlisting}[style=customc]
+...
+
+    /* return if bits() or decode() tries to read past available input */
+    if (setjmp(s.env) != 0)             /* if came back here via longjmp(), */
+        err = 2;                        /*  then skip decomp(), return error */
+    else
+	err = decomp(&s); /* decompress */
+
+...
+
+    /* load at least need bits into val */
+    val = s->bitbuf;
+    while (s->bitcnt < need) {
+        if (s->left == 0) {
+            s->left = s->infun(s->inhow, &(s->in));
+	    if (s->left == 0) longjmp(s->env, 1); /* out of input */
+
+...
+
+        if (s->left == 0) {
+            s->left = s->infun(s->inhow, &(s->in));
+	    if (s->left == 0) longjmp(s->env, 1); /* out of input */
+\end{lstlisting}
+（zlib/contrib/blast/blast.c）
+
+\TT{setjmp()}への呼び出しは、現在の\ac{PC}、\ac{SP}、その他のレジスタを\TT{env}構造体に保存し、その後0を返します。
+
+エラーの場合、\TT{longjmp()}はあなたを\TT{setjmp()}呼び出し直後の位置に\IT{テレポート}させ、
+まるで\TT{setjmp()}呼び出しが非null値（\TT{longjmp()}に渡されたもの）を返したかのようになります。
+\myindex{UNIX!fork}
+これはUNIXの\TT{fork()} syscallを思い出させます。
+
+簡潔な例を見てみましょう：
+
+\lstinputlisting[style=customc]{advanced/625_setjmp/1.c}
+
+実行すると、次のようになります：
+
+\begin{lstlisting}
+f1() begin
+f2() begin
+Error 1234
+\end{lstlisting}
+
+\TT{jmp\_buf}構造体は通常文書化されておらず、将来の互換性を保つためです。
+
+MSVC 2013 x64でsetjmp()がどのように実装されているか見てみましょう：
+
+\lstinputlisting[style=customasmx86]{advanced/625_setjmp/setjmp_VC2013_x64.asm}
+
+ほぼすべてのレジスタの現在値でjmp\_buf構造体を単に埋めています。
+また、\ac{RA}の現在値がスタックから取得され、jmp\_bufに保存されます：
+これは将来の新しい\ac{PC}値として使用されます。
+
+今度はlongjmp()です：
+
+\lstinputlisting[style=customasmx86]{advanced/625_setjmp/longjmp_VC2013_x64.asm}
+
+（ほぼ）すべてのレジスタを復元し、構造体から\ac{RA}を取得してそこにジャンプします。
+これは実質的にsetjmp()が呼び出し元に戻ったかのように動作します。
+また、\TT{RAX}はlongjmp()の2番目の引数と等しく設定されます。
+これはsetjmp()が最初から非ゼロ値を返したかのように動作します。
+
+setjmp()とlongjmp()呼び出しの間でスタックに設定・使用されたすべての値は、\ac{SP}の復元の副作用として単に破棄されます。
+それらは二度と使用されません。
+したがって、longjmp()は通常後方にジャンプします
+\footnote{しかし、コルーチンなどのより複雑なことに使用する人もいます：\url{https://www.embeddedrelated.com/showarticle/455.php}、
+\url{http://fanf.livejournal.com/105413.html}}。
+
+これは、C++のthrow/catchメカニズムとは異なり、メモリが解放されたり、デストラクタが呼ばれたりしないことを意味します。
+したがって、この技法は時々危険な場合があります。
+それでも、まだかなり人気があります。\oracle{}でも使用されています。
+
+また、予期しない副作用もあります：関数内でバッファがオーバーフローし（おそらくリモート攻撃により）、
+関数がエラーを報告したくてlongjmp()を呼び出すと、上書きされたスタック部分は単に使用されなくなります。
+
+演習として、なぜすべてのレジスタが保存されないのかを理解してみることができます。
+なぜXMM0-XMM5や他のレジスタはスキップされるのでしょうか？

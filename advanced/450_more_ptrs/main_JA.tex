@@ -1,0 +1,83 @@
+\mysection{ポインタについてさらに詳しく}
+\myindex{\CLanguageElements!\Pointers}
+\label{label_pointers}
+
+\epigraph{Cがポインタを処理する方法は、例えば、素晴らしいイノベーションでした。データ構造化で以前に抱えていた多くの問題を解決し、プログラムをその後見栄えよくしました。}{Donald Knuth, インタビュー（1993年）}
+
+\CCpp{}ポインタの理解にまだ苦労している人々のために、さらに多くの例を示します。
+これらの一部は奇妙で、デモンストレーション目的のみのためのものです：
+本当に何をしているかを知らない限り、本番コードでは使用しないでください。
+
+\input{advanced/450_more_ptrs/1_JA}
+\input{advanced/450_more_ptrs/2_JA}
+\input{advanced/450_more_ptrs/3_JA}
+\input{advanced/450_more_ptrs/4_JA}
+\input{advanced/450_more_ptrs/5_JA}
+\input{advanced/450_more_ptrs/6_JA}
+
+\subsection{オブジェクト識別子としてのポインタ}
+
+アセンブリ言語とCの両方には\ac{OOP}機能はありませんが、\ac{OOP}スタイルでコードを書くことは可能です
+（単に構造体をオブジェクトとして扱います）。
+
+興味深いことに、時々、オブジェクトへのポインタ（またはそのアドレス）がID
+（データ隠蔽/カプセル化の意味で）と呼ばれることがあります。
+
+\myindex{win32!LoadLibrary()}
+\myindex{win32!GetProcAddress()}
+例えば、LoadLibrary()は、\ac{MSDN}によると、「モジュールへのハンドル」を返します
+\footnote{\url{https://msdn.microsoft.com/ru-ru/library/windows/desktop/ms684175(v=vs.85).aspx}}。
+その後、この「ハンドル」をGetProcAddress()などの他の関数に渡します。
+しかし実際には、LoadLibrary()はメモリにマップされたDLLファイルへのポインタを返します
+\footnote{\url{https://blogs.msdn.microsoft.com/oldnewthing/20041025-00/?p=37483}}。
+LoadLibrary()が返すアドレスから2バイトを読み取ることができ、それは「MZ」になります（WindowsのすべてのEXE/DLLファイルの最初の2バイト）。
+
+\myindex{win32!HMODULE}
+\myindex{win32!HINSTANCE}
+明らかに、Microsoftは将来の互換性を向上させるためにその事実を「隠して」います。
+また、HMODULEとHINSTANCEデータ型は16ビットWindowsでは別の意味を持っていました。
+
+おそらく、これが\printf{}に「\%p」修飾子がある理由です。これはポインタ（32ビットアーキテクチャでは32ビット整数、64ビットでは64ビット、など）を16進形式で印刷するために使用されます。
+デバッグログにダンプされた構造体のアドレスは、ログの別の場所でそれを見つけるのに役立つかもしれません。
+
+\myindex{SQLite}
+これはSQLiteソースコードからの例もあります：
+
+\begin{lstlisting}
+
+...
+
+struct Pager {
+  sqlite3_vfs *pVfs;          /* OS functions to use for IO */
+  u8 exclusiveMode;           /* Boolean. True if locking_mode==EXCLUSIVE */
+  u8 journalMode;             /* One of the PAGER_JOURNALMODE_* values */
+  u8 useJournal;              /* Use a rollback journal on this file */
+  u8 noSync;                  /* Do not sync the journal if true */
+
+....
+
+static int pagerLockDb(Pager *pPager, int eLock){
+  int rc = SQLITE_OK;
+
+  assert( eLock==SHARED_LOCK || eLock==RESERVED_LOCK || eLock==EXCLUSIVE_LOCK );
+  if( pPager->eLock<eLock || pPager->eLock==UNKNOWN_LOCK ){
+    rc = sqlite3OsLock(pPager->fd, eLock);
+    if( rc==SQLITE_OK && (pPager->eLock!=UNKNOWN_LOCK||eLock==EXCLUSIVE_LOCK) ){
+      pPager->eLock = (u8)eLock;
+      IOTRACE(("LOCK %p %d\n", pPager, eLock))
+    }
+  }
+  return rc;
+}
+
+...
+
+  PAGER_INCR(sqlite3_pager_readdb_count);
+  PAGER_INCR(pPager->nRead);
+  IOTRACE(("PGIN %p %d\n", pPager, pgno));
+  PAGERTRACE(("FETCH %d page %d hash(%08x)\n",
+               PAGERID(pPager), pgno, pager_pagehash(pPg)));
+
+...
+
+\end{lstlisting}

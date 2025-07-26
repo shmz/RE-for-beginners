@@ -1,0 +1,79 @@
+\subsection{C構造体内の可変長配列}
+
+一部のwin32構造体では、最後のフィールドが1要素の配列として定義されているものがあります：
+
+\begin{lstlisting}[style=customc]
+typedef struct _SYMBOL_INFO {
+  ULONG   SizeOfStruct;
+  ULONG   TypeIndex;
+  
+  ...
+
+  ULONG   MaxNameLen;
+  TCHAR   Name[1];
+} SYMBOL_INFO, *PSYMBOL_INFO;
+\end{lstlisting}
+
+（\url{https://msdn.microsoft.com/en-us/library/windows/desktop/ms680686(v=vs.85).aspx}）
+
+これはハックであり、最後のフィールドが不明なサイズの配列であることを意味し、
+構造体の割り当て時にサイズが計算されます。
+
+なぜでしょうか：\IT{Name}フィールドは短い場合があるので、128、256、またはそれ以上の\IT{MAX\_NAME}
+定数のようなもので定義する理由があるでしょうか？
+
+なぜポインタを使わないのでしょうか？その場合、2つのブロックを割り当てる必要があります：構造体用の1つと文字列用の1つです。
+これはより遅く、より大きなメモリオーバーヘッドが必要かもしれません。
+また、ポインタの逆参照（つまり、構造体から文字列のアドレスを読み取る）が必要です---大したことではありませんが、一部の人はこれでも余分なコストだと言います。
+
+これは\IT{struct hack}としても知られています：\url{http://c-faq.com/struct/structhack.html}。
+
+例：
+
+\begin{lstlisting}[style=customc]
+#include <stdio.h>
+
+struct st
+{
+	int a;
+	int b;
+	char s[];
+};
+
+void f (struct st *s)
+{
+	printf ("%d %d %s\n", s->a, s->b, s->s);
+	// f() can't replace s[] with bigger string - size of allocated block is unknown at this point
+};
+
+int main()
+{
+#define STRING "Hello!"
+	struct st *s=malloc(sizeof(struct st)+strlen(STRING)+1); // incl. terminating zero
+	s->a=1;
+	s->b=2;
+	strcpy (s->s, STRING);
+	f(s);
+};
+\end{lstlisting}
+
+簡単に言うと、Cには配列境界チェックがないため動作します。どの配列も無限のサイズを持つものとして扱われます。
+
+問題：割り当て後、構造体用に割り当てられたブロックの全体サイズは不明です（メモリマネージャを除いて）、
+したがって、文字列をより大きな文字列で置き換えることはできません。
+フィールドが\IT{s[MAX\_NAME]}のように宣言されていれば、それでも可能でしょう。
+
+言い換えれば、構造体と配列（または文字列）が単一の割り当てられたメモリブロック内で融合されています。
+もう一つの問題は、明らかに単一の構造体内でそのような配列を2つ宣言することはできませんし、そのような配列の後に別のフィールドを宣言することもできないということです。
+
+古いコンパイラは少なくとも1つの要素を持つ配列を宣言する必要があります：\IT{s[1]}、新しいものは可変サイズ配列として宣言することを許可します：\IT{s[]}。
+これはC99標準では\IT{可変配列メンバ}\footnote{\url{https://en.wikipedia.org/wiki/Flexible_array_member}}と呼ばれます。
+
+GCCドキュメント\footnote{\url{https://gcc.gnu.org/onlinedocs/gcc/Zero-Length.html}}、
+MSDNドキュメント\footnote{\url{https://msdn.microsoft.com/en-us/library/b6fae073.aspx}}で詳しく読むことができます。
+
+Dennis Ritchie（Cの作成者の一人）はこのトリックを\q{Cの実装との不当な親密さ}
+と呼びました（おそらく、このトリックのハック的性質を認めていたのでしょう）。
+
+好きであろうとなかろうと、使用するかしないかに関わらず：
+これは構造体がメモリにどのように格納されるかの別の実証であるため、私はそれについて書いています。

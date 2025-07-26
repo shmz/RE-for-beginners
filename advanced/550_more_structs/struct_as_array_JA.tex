@@ -1,0 +1,74 @@
+\subsection{C構造体を配列の代わりに使用することもある}
+
+\subsubsection{算術平均}
+
+\begin{lstlisting}[style=customc]
+#include <stdio.h>
+
+int mean(int *a, int len)
+{
+	int sum=0;
+	for (int i=0; i<len; i++)
+		sum=sum+a[i];
+	return sum/len;
+};
+
+struct five_ints
+{
+	int a0;
+	int a1;
+	int a2;
+	int a3;
+	int a4;
+};
+
+int main()
+{
+	struct five_ints a;
+	a.a0=123;
+	a.a1=456;
+	a.a2=789;
+	a.a3=10;
+	a.a4=100;
+	printf ("%d\n", mean(&a, 5));
+	// test: https://www.wolframalpha.com/input/?i=mean(123,456,789,10,100)
+};
+\end{lstlisting}
+
+これは動作します：\IT{mean()}関数は\IT{five\_ints}構造体の終端を超えてアクセスすることはありません。
+なぜなら5が渡されており、5つの整数のみがアクセスされるからです。
+
+\subsubsection{構造体に文字列を入れる}
+
+\begin{lstlisting}[style=customc]
+#include <stdio.h>
+
+struct five_chars
+{
+	char a0;
+	char a1;
+	char a2;
+	char a3;
+	char a4;
+} __attribute__ ((aligned (1),packed));
+
+int main()
+{
+	struct five_chars a;
+	a.a0='h';
+	a.a1='i';
+	a.a2='!';
+	a.a3='\n';
+	a.a4=0;
+	printf (&a); // prints "hi!"
+};
+\end{lstlisting}
+
+\IT{((aligned (1),packed))}属性を使用する必要があります。そうでなければ、
+各構造体フィールドは4バイトまたは8バイト境界にアラインされます。
+
+\subsubsection{まとめ}
+
+これは、構造体と配列がメモリにどのように格納されているかのもう一つの例です。
+おそらく、理性的なプログラマはこの例のようなことはしないでしょう。特定のハックの場合や、
+ソースコードの難読化の場合を除いて。

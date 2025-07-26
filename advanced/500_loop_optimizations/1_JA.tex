@@ -1,0 +1,61 @@
+\subsection{奇妙なループ最適化}
+
+これは最もシンプルなmemcpy()関数の実装です：
+
+\begin{lstlisting}[style=customc]
+void memcpy (unsigned char* dst, unsigned char* src, size_t cnt)
+{
+	size_t i;
+	for (i=0; i<cnt; i++)
+		dst[i]=src[i];
+};
+\end{lstlisting}
+
+少なくとも1990年代末のMSVC 6.0からMSVC 2013まで、本当に奇妙なコードを生成することがあります（このリストはMSVC 2013 x86によって生成されました）：
+
+\lstinputlisting[style=customasmx86]{advanced/500_loop_optimizations/1_1_EN.lst}
+
+これは奇妙です。なぜなら人間は2つのポインタをどのように扱うでしょうか？彼らは2つのアドレスを2つのレジスタまたは2つのメモリセルに格納します。
+この場合のMSVCコンパイラは、2つのポインタを1つのポインタ（\EAX{}の\IT{sliding dst}）と\IT{src}と\IT{dst}ポインタの差（ループ本体の実行範囲にわたって\ESI{}で変更されない）として格納します。
+\myindex{\CLanguageElements!ptrdiff\_t}
+（ちなみに、これはptrdiff\_tデータ型が使用できる稀なケースです。）
+\IT{src}からバイトをロードする必要がある場合、\IT{diff + sliding dst}でロードし、バイトを\IT{sliding dst}だけに格納します。
+
+これは何らかの最適化トリックであるはずです。しかし、私がこの関数を次のように書き直したところ：
+
+\lstinputlisting[style=customasmx86]{advanced/500_loop_optimizations/1_2.lst}
+
+\dots{}私のIntel Xeon E31220 @ 3.10GHzでは、\IT{最適化された}バージョンと同じくらい効率的に動作します。
+おそらく、この最適化は1990年代のより古いx86 CPUを対象としていたのでしょう。この技法は少なくとも古いMS VC 6.0で使用されているからです。
+
+何かアイデアはありますか？
+
+\myindex{Hex-Rays}
+Hex-Rays 2.2はこのようなパターンを認識するのに苦労します（うまくいけば、一時的に？）：
+
+\begin{lstlisting}[style=customc]
+void __cdecl f1(char *dst, char *src, size_t size)
+{
+  size_t counter; // edx@1
+  char *sliding_dst; // eax@2
+  char tmp; // cl@3
+
+  counter = size;
+  if ( size )
+  {
+    sliding_dst = dst;
+    do
+    {
+      tmp = (sliding_dst++)[src - dst];         // difference (src-dst) is calculated once, before loop body
+      *(sliding_dst - 1) = tmp;
+      --counter;
+    }
+    while ( counter );
+  }
+}
+\end{lstlisting}
+
+それにもかかわらず、この最適化技法はMSVCによってよく使用されます（自作の\IT{memcpy()}ルーチンだけでなく、2つ以上の配列を使用する多くのループで）。
+そのため、リバースエンジニアが覚えておく価値があります。
+
+% <!-- As of why writting occurred after <b>dst</b> incrementing? -->

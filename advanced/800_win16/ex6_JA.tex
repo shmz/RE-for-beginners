@@ -1,0 +1,37 @@
+\subsection{\Example{} \#6}
+
+\lstinputlisting[style=customc]{\CURPATH/ex6.c}
+
+\lstinputlisting[style=customasmx86]{\CURPATH/ex6.lst}
+
+\myindex{\CStandardLibrary!time()}
+\myindex{\CStandardLibrary!localtime()}
+
+UNIX timeは32ビット値なので、\TT{DX:AX}レジスタペアで返され、2つのローカル16ビット変数に格納されます。
+その後、ペアへのポインタが\TT{localtime()}関数に渡されます。
+\TT{localtime()}関数は、Cライブラリの内部のどこかに\TT{struct tm}を
+割り当てているため、そのポインタのみが返されます。
+
+ちなみに、これは結果が使用されるまで関数を再度呼び出すことができないことも意味します。
+
+\TT{time()}と\TT{localtime()}関数には、
+ここでWatcom呼び出し規約が使用されています：
+最初の4つの引数は\TT{AX}、\TT{DX}、\TT{BX}、\TT{CX}レジスタで渡され、
+残りの引数はスタック経由で渡されます。
+
+この規約を使用する関数は、名前の最後にアンダースコアでマークされています。
+
+\TT{sprintf()}は\TT{PASCAL}呼び出し規約もWatcom規約も使用せず、\\ % varioref bug
+引数は通常の\IT{cdecl}方式で渡されます（\myref{cdecl}）。
+
+\subsubsection{グローバル変数}
+
+これは同じ例ですが、今度はこれらの変数がグローバルです：
+
+\lstinputlisting[style=customc]{\CURPATH/ex6_global.c}
+
+\lstinputlisting[style=customasmx86]{\CURPATH/ex6_global.lst}
+
+\TT{t}は使用されませんが、コンパイラは値を格納するコードを出力しました。
+
+なぜなら、その値が最終的に他のモジュールで使用される可能性があることを確信していないからです。

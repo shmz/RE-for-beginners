@@ -1,0 +1,130 @@
+\subsection{C構造体のバージョン}
+
+多くのWindowsプログラマはMSDNでこれを見たことがあるでしょう：
+
+\begin{lstlisting}
+SizeOfStruct
+    The size of the structure, in bytes. This member must be set to sizeof(SYMBOL_INFO).
+\end{lstlisting}
+
+（\url{https://msdn.microsoft.com/en-us/library/windows/desktop/ms680686(v=vs.85).aspx}）
+
+\IT{SYMBOL\_INFO}などの一部の構造体は実際にこのフィールドで始まります。なぜでしょうか？
+これは一種の構造体バージョンです。
+
+円を描く関数があるとします。
+それは単一の引数---X、Y、半径の3つのフィールドのみを持つ構造体へのポインタを受け取ります。
+そして1980年代のある時期にカラーディスプレイが市場に氾濫し、関数に\IT{color}引数を追加したいとします。
+しかし、別の引数を追加することはできないとしましょう（多くのソフトウェアがあなたの\ac{API}を使用しており、再コンパイルできません）。
+古いソフトウェアがカラーディスプレイであなたの\ac{API}を使用する場合、
+関数に円を（デフォルトの）白黒色で描画させましょう。
+
+別の日、別の機能を追加します：円を塗りつぶすことができ、ブラシの種類を設定できます。
+
+問題の解決策の一つは次のとおりです：
+
+\begin{lstlisting}[style=customc]
+#include <stdio.h>
+
+struct ver1
+{
+	size_t SizeOfStruct;
+	int coord_X;
+	int coord_Y;
+	int radius;
+};
+
+struct ver2
+{
+	size_t SizeOfStruct;
+	int coord_X;
+	int coord_Y;
+	int radius;
+	int color;
+};
+
+struct ver3
+{
+	size_t SizeOfStruct;
+	int coord_X;
+	int coord_Y;
+	int radius;
+	int color;
+	int fill_brush_type; // 0 - do not fill circle
+};
+
+void draw_circle(struct ver3 *s) // latest struct version is used here
+{
+	// we presume SizeOfStruct, coord_X and coord_Y fields are always present
+	printf ("We are going to draw a circle at %d:%d\n", s->coord_X, s->coord_Y);
+
+	if (s->SizeOfStruct>=sizeof(int)*5)
+	{
+		// this is at least ver2, color field is present
+		printf ("We are going to set color %d\n", s->color);
+	}
+
+	if (s->SizeOfStruct>=sizeof(int)*6)
+	{
+		// this is at least ver3, fill_brush_type field is present
+		printf ("We are going to fill it using brush type %d\n", s->fill_brush_type);
+	}
+};
+
+// early software version
+void call_as_ver1()
+{
+	struct ver1 s;
+	s.SizeOfStruct=sizeof(s);
+	s.coord_X=123;
+	s.coord_Y=456;
+	s.radius=10;
+	printf ("** %s()\n", __FUNCTION__);
+	draw_circle(&s);
+};
+
+// next software version
+void call_as_ver2()
+{
+	struct ver2 s;
+	s.SizeOfStruct=sizeof(s);
+	s.coord_X=123;
+	s.coord_Y=456;
+	s.radius=10;
+	s.color=1;
+	printf ("** %s()\n", __FUNCTION__);
+	draw_circle(&s);
+};
+
+// latest, most advanced version
+void call_as_ver3()
+{
+	struct ver3 s;
+	s.SizeOfStruct=sizeof(s);
+	s.coord_X=123;
+	s.coord_Y=456;
+	s.radius=10;
+	s.color=1;
+	s.fill_brush_type=3;
+	printf ("** %s()\n", __FUNCTION__);
+	draw_circle(&s);
+};
+
+int main()
+{
+	call_as_ver1();
+	call_as_ver2();
+	call_as_ver3();
+};
+\end{lstlisting}
+
+言い換えれば、\IT{SizeOfStruct}フィールドは\IT{構造体のバージョン}フィールドの役割を果たします。
+それは列挙型（1、2、3など）である可能性がありますが、\IT{SizeOfStruct}フィールドを\IT{sizeof(struct...)}に設定することは
+間違い/バグがより起こりにくいです：呼び出し元のコードで\IT{s.SizeOfStruct=sizeof(...)}と書くだけです。
+
+C++では、この問題は\IT{継承}を使用して解決されます（\myref{cpp_inheritance}）。
+基底クラス（\IT{Circle}と呼びましょう）を拡張し、
+その後\IT{ColoredCircle}、そして\IT{FilledColoredCircle}などを持つことになります。
+オブジェクトの現在の\IT{バージョン}（またはより正確には、現在の\IT{型}）は、C++の\ac{RTTI}を使用して決定されます。
+
+\ac{MSDN}のどこかで\IT{SizeOfStruct}を見るとき---おそらくその構造体は過去に少なくとも一度拡張されたのでしょう。
