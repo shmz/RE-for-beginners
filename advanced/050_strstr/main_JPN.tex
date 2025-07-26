@@ -1,0 +1,35 @@
+\mysection{strstr()の例}
+\label{strstr_example}
+\myindex{\CStandardLibrary!strstr()}
+
+GCCが時々文字列の一部を使用できるという事実に戻りましょう：\myref{use_parts_of_C_strings}。
+
+\IT{strstr()} \CCpp標準ライブラリ関数は、文字列内の任意の出現を見つけるために使用されます。
+これが私たちが行うことです：
+
+\begin{lstlisting}[style=customc]
+#include <string.h>
+#include <stdio.h>
+
+int main()
+{
+	char *s="Hello, world!";
+	char *w=strstr(s, "world");
+
+	printf ("%p, [%s]\n", s, s);
+	printf ("%p, [%s]\n", w, w);
+};
+\end{lstlisting}
+
+出力は：
+
+\begin{lstlisting}
+0x8048530, [Hello, world!]
+0x8048537, [world!]
+\end{lstlisting}
+
+元の文字列のアドレスと\IT{strstr()}が返した部分文字列のアドレスの差は7です。
+実際、\q{Hello, }文字列の長さは7文字です。
+
+2回目の呼び出し時に\printf{}関数は、渡された文字列の前に他の文字があることを知らず、
+元の文字列の中央から末尾（ゼロバイトでマーク）まで文字を印刷します。

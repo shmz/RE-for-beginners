@@ -1,0 +1,58 @@
+\mysection{二重否定}
+
+非ゼロ値を1（または論理値\IT{true}）に、ゼロ値を0（または論理値\IT{false}）に変換する一般的な方法\footnote{この方法は読みにくいコードを生成するため議論の余地がある}は\IT{!!statement}です：
+
+\begin{lstlisting}[style=customc]
+int convert_to_bool(int a)
+{
+	return !!a;
+};
+\end{lstlisting}
+
+最適化GCC 5.4 x86：
+
+\begin{lstlisting}[style=customasmx86]
+convert_to_bool:
+        mov     edx, DWORD PTR [esp+4]
+        xor     eax, eax
+        test    edx, edx
+        setne   al
+        ret
+\end{lstlisting}
+
+\INS{XOR}は、\INS{SETNE}がトリガーされない場合でも、常に\EAX内の戻り値をクリアします。
+つまり、\INS{XOR}はデフォルトの戻り値を0に設定します。
+
+\myindex{x86!\Instructions!SET}
+入力値がゼロと等しくない場合（\INS{SET}命令の\TT{-NE}サフィックス）、
+1が\ALに設定され、そうでなければ\ALは変更されません。
+
+なぜ\INS{SETNE}は\EAXレジスタの下位8ビット部分で動作するのでしょうか？
+なぜなら重要なのは最後のビット（0または1）だけで、他のビットは\INS{XOR}によってクリアされているからです。
+
+したがって、そのC/C++コードは次のように書き換えることができます：
+
+\begin{lstlisting}[style=customc]
+int convert_to_bool(int a)
+{
+	if (a!=0)
+		return 1;
+	else
+		return 0;
+};
+\end{lstlisting}
+
+\dots または：
+
+\begin{lstlisting}[style=customc]
+int convert_to_bool(int a)
+{
+	if (a)
+		return 1;
+	else
+		return 0;
+};
+\end{lstlisting}
+
+\INS{SET}に類似した命令を持たない\ac{CPU}をターゲットとするコンパイラは、この場合、
+分岐命令などを生成します。

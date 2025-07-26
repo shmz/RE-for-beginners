@@ -1,0 +1,30 @@
+﻿\subsection{x86}
+
+\dotsは非常に予測可能な方法でコンパイルされます：
+
+\lstinputlisting[caption=MSVC,style=customasmx86]{\CURPATH/11_1_msvc_EN.asm}
+
+\myindex{x86!\Instructions!IDIV}
+
+\IDIVは\TT{EDX:EAX}レジスタペアに格納された64ビット数を\ECXの値で除算します。
+結果として、\EAXには\gls{quotient}が、\EDXには余りが含まれます。
+結果は\ttf関数から\EAXレジスタで return されるため、
+除算演算後に値は移動せず、すでに正しい場所にあります。
+
+\IDIVは\TT{EDX:EAX}レジスタペアの値を使用するため、\TT{CDQ}命令（\IDIVの前）は
+\MOVSXと同様に、符号を考慮して\EAXの値を64ビット値に拡張します。
+
+最適化をオンにする（\Ox）と、以下が得られます：
+
+\lstinputlisting[caption=\Optimizing MSVC,style=customasmx86]{\CURPATH/11_1_msvc_Ox.asm}
+
+これは乗算による除算です。乗算演算ははるかに高速に動作します。
+そして、このトリック
+\footnote{乗算による除算について詳しくは\InSqBrackets{\HenryWarren 10-3}をお読みください}
+を使用して、事実上同等でより高速なコードを生成することが可能です。
+
+これはコンパイラの最適化では\q{強度削減}とも呼ばれます。
+
+GCC 4.4.1は追加の最適化フラグなしでも、最適化をオンにしたMSVCと同様に、ほぼ同じコードを生成します：
+
+\lstinputlisting[caption=\NonOptimizing GCC 4.4.1,style=customasmx86]{\CURPATH/11_2_gcc.asm}

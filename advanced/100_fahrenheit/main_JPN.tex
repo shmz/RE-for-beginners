@@ -1,0 +1,91 @@
+\mysection{温度変換}
+
+プログラミング初心者向けの本でもう一つ非常に人気のある例は、華氏温度を摂氏に変換したり、その逆を行う小さなプログラムです。
+
+\[
+	C=\frac{5 \cdot (F-32)}{9}
+\]
+
+簡単なエラーハンドリングも追加できます：
+1) ユーザーが正しい数値を入力したかチェックする必要があります；
+2) 摂氏温度が$-273$度以下でないかチェックする必要があります
+（これは絶対零度以下であり、学校の物理の授業から覚えているかもしれません）。
+
+\myindex{\CStandardLibrary!exit()}
+\TT{exit()}関数は\gls{caller}関数に戻ることなく、プログラムを即座に終了します。
+
+\subsection{整数値}
+
+\lstinputlisting[style=customc]{\CURPATH/i.c}
+
+\subsubsection{\Optimizing MSVC 2012 x86}
+
+\lstinputlisting[caption=\Optimizing MSVC 2012 x86,style=customasmx86]{\CURPATH/i_MSVC_2012_Ox_x86_EN.asm}
+
+これについて言えることは：
+
+\begin{itemize}
+\item \printfのアドレスが最初に\ESIレジスタにロードされるので、その後の
+\printf呼び出しは\TT{CALL ESI}命令だけで実行されます。
+これは非常に人気のあるコンパイラの技法で、コード内に同じ関数への
+連続した複数の呼び出しがあり、かつ/またはこの目的に使用できる空きレジスタがある場合に可能です。
+
+\item 値から32を減算する必要がある場所で\TT{ADD EAX, -32}命令が見られます。
+$EAX=EAX+(-32)$は$EAX=EAX-32$と等価であり、
+なぜかコンパイラは\TT{SUB}の代わりに\TT{ADD}を使用することにしました。
+おそらく価値があるのでしょうが、確信を持つのは困難です。
+
+\myindex{x86!\Instructions!LEA}
+\item \LEA命令は値に5を掛ける際に使用されています：\TT{lea ecx, DWORD PTR [eax+eax*4]}。
+はい、$i+i*4$は$i*5$と等価であり、\LEA
+は\TT{IMUL}より高速に動作します。\\
+ちなみに、\TT{SHL EAX, 2 / ADD EAX, EAX}命令ペアもここで使用できました---
+一部のコンパイラはそのようにします。
+
+\item 乗算による除算トリック（\myref{sec:divisionbymult}）も
+ここで使用されています。
+
+\item \mainは最後に\TT{return 0}がなくても0を返します。
+C99標準では\InSqBrackets{\CNineNineStd 5.1.2.2.3}、\TT{return}文が
+欠けている場合、\mainは0を返すと述べています。
+このルールは\main関数にのみ適用されます。
+
+ただし、MSVCは公式にはC99をサポートしていませんが、部分的にサポートしているのでしょうか？
+\end{itemize}
+
+\subsubsection{\Optimizing MSVC 2012 x64}
+
+コードはほぼ同じですが、各\TT{exit()}呼び出しの後に\TT{INT 3}命令があることがわかります。
+
+\begin{lstlisting}[style=customasmx86]
+	xor	ecx, ecx
+	call	QWORD PTR __imp_exit
+	int	3
+\end{lstlisting}
+
+\TT{INT 3}はデバッガのブレークポイントです。
+
+\TT{exit()}は決して戻ることのない関数の一つであることが知られており
+\footnote{もう一つの人気のあるものは\TT{longjmp()}です}、
+もし戻った場合、何か本当におかしなことが起こったのであり、デバッガをロードする時です。
+
+\subsection{浮動小数点値}
+
+\lstinputlisting[style=customc]{\CURPATH/f.c}
+
+MSVC 2010 x86は\ac{FPU}命令を使用します\dots
+
+\lstinputlisting[caption=\Optimizing MSVC 2010 x86,style=customasmx86]{\CURPATH/f_MSVC_2010_x86_Ox_EN.asm}
+
+\dotsしかしMSVC 2012は代わりに\ac{SIMD}命令を使用します：
+
+\lstinputlisting[caption=\Optimizing MSVC 2010 x86,style=customasmx86]{\CURPATH/f_MSVC_2012_x86_Ox_EN.asm}
+
+もちろん、\ac{SIMD}命令は浮動小数点数で動作するものを含めて、
+x86モードで利用可能です。
+
+計算にそれらを使用する方がやや簡単なので、新しいMicrosoftコンパイラはそれらを使用します。
+
+$-273$の値が\XMM{0}レジスタに非常に早くロードされることも確認できます。
+そしてそれは問題ありません。なぜなら、コンパイラは
+ソースコード内の順序とは異なる順序で命令を出力する場合があるからです。

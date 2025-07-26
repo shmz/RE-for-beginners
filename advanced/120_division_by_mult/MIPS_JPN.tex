@@ -1,0 +1,27 @@
+﻿\subsection{MIPS}
+
+何らかの理由で、最適化GCC 4.4.5は除算命令だけを生成します：
+
+\lstinputlisting[caption=\Optimizing GCC 4.4.5 (IDA),style=customasmMIPS]{\CURPATH/MIPS_O3_IDA_EN.lst}
+
+\myindex{MIPS!\Instructions!BREAK}
+ここで新しい命令が見られます：BREAK。これは例外を発生させるだけです。
+
+この場合、除数がゼロの場合に例外が発生します（従来の数学ではゼロで除算することは不可能です）。
+
+しかし、GCCはおそらく最適化の仕事をあまりうまく行わず、\$V0が決してゼロにならないことを認識しませんでした。
+
+そのため、チェックがここに残っています。
+何らかの理由で\$V0がゼロの場合、BREAKが実行され、\ac{OS}に例外について知らせます。
+
+\myindex{MIPS!\Instructions!MFLO}
+それ以外の場合、MFLOが実行され、LOレジスタから除算の結果を取得し、\$V0にコピーします。
+
+\myindex{MIPS!\Registers!LO}
+\myindex{MIPS!\Registers!HI}
+ちなみに、ご存知かもしれませんが、MUL命令は結果の上位32ビットをレジスタHIに、下位32ビットをレジスタLOに残します。
+
+DIVは結果をLOレジスタに、余りをHIレジスタに残します。
+
+\myindex{MIPS!\Instructions!MFHI}
+文を\q{a \% 9}に変更すると、MFLOの代わりにMFHI命令がここで使用されることになります。
