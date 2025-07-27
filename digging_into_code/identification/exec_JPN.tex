@@ -1,0 +1,132 @@
+\mysection{実行可能ファイルの識別}
+
+\subsection{Microsoft Visual C++}
+\label{MSVC_versions}
+
+MSVCバージョンとインポート可能なDLL：
+
+\small
+\begin{center}
+\begin{tabular}{ | l | l | l | l | l | }
+\hline
+\HeaderColor マーケティング版 & 
+\HeaderColor 内部版 & 
+\HeaderColor CL.EXE版 &
+\HeaderColor インポートされるDLL &
+\HeaderColor リリース日 \\
+\hline
+% 4.0, April 1995
+% 97 & 5.0 & February 1997
+6		&  6.0	& 12.00	& msvcrt.dll	& June 1998		\\
+		&	&	& msvcp60.dll	&			\\
+\hline
+.NET (2002)	&  7.0	& 13.00	& msvcr70.dll	& February 13, 2002	\\
+		&	&	& msvcp70.dll	&			\\
+\hline
+.NET 2003	&  7.1	& 13.10 & msvcr71.dll	& April 24, 2003	\\
+		&	&	& msvcp71.dll	&			\\
+\hline
+2005		&  8.0	& 14.00 & msvcr80.dll	& November 7, 2005	\\
+		&	&	& msvcp80.dll	&			\\
+\hline
+2008		&  9.0	& 15.00 & msvcr90.dll	& November 19, 2007	\\
+		&	&	& msvcp90.dll	&			\\
+\hline
+2010		& 10.0	& 16.00 & msvcr100.dll	& April 12, 2010 	\\
+		&	&	& msvcp100.dll	&			\\
+\hline
+2012		& 11.0	& 17.00 & msvcr110.dll	& September 12, 2012 	\\
+		&	&	& msvcp110.dll	&			\\
+\hline
+2013		& 12.0	& 18.00 & msvcr120.dll	& October 17, 2013 	\\
+		&	&	& msvcp120.dll	&			\\
+\hline
+\end{tabular}
+\end{center}
+\normalsize
+
+msvcp*.dllは\Cpp{}関連の関数を持つため、これがインポートされている場合、
+おそらく\Cpp{}プログラムです。
+
+\subsubsection{名前修飾}
+
+名前は通常\TT{?}シンボルで始まります。
+
+MSVCの\gls{name mangling}についてはこちらで詳しく読むことができます：\myref{namemangling}。
+
+\subsection{GCC}
+\myindex{GCC}
+
+*NIXターゲット以外にも、GCCはCygwinとMinGWの形でwin32環境にも存在します。
+
+\subsubsection{名前修飾}
+
+名前は通常\TT{\_Z}シンボルで始まります。
+
+GCCの\gls{name mangling}についてはこちらで詳しく読むことができます：\myref{namemangling}。
+
+\subsubsection{Cygwin}
+\myindex{Cygwin}
+
+cygwin1.dllがしばしばインポートされます。
+
+\subsubsection{MinGW}
+\myindex{MinGW}
+
+msvcrt.dllがインポートされる可能性があります。
+
+\subsection{Intel Fortran}
+\myindex{Fortran}
+
+libifcoremd.dll、libifportmd.dll、libiomp5md.dll（OpenMPサポート）がインポートされる可能性があります。
+
+libifcoremd.dllには\TT{for\_}で始まる多くの関数があり、これは\IT{Fortran}を意味します。
+
+\subsection{Watcom, OpenWatcom}
+\myindex{Watcom}
+\myindex{OpenWatcom}
+
+\subsubsection{名前修飾}
+
+名前は通常\TT{W}シンボルで始まります。
+
+例えば、引数を持たず\Tvoidを返すクラス「class」のメソッド「method」は次のようにエンコードされます：
+
+\begin{lstlisting}
+W?method$_class$n__v
+\end{lstlisting}
+
+\subsection{Borland}
+\myindex{Borland Delphi}
+\myindex{Borland C++Builder}
+
+これはBorland DelphiとC++Builderの\gls{name mangling}の例です：
+
+\lstinputlisting{digging_into_code/identification/borland_mangling.txt}
+
+名前は常に\TT{@}シンボルで始まり、その後にクラス名、メソッド名、メソッド引数の型がエンコードされます。
+
+これらの名前は.exeインポート、.dllエクスポート、デバッグデータなどにあります。
+
+Borland Visual Component Libraries（VCL）は.dllファイルの代わりに.bplファイルに格納されます。例：vcl50.dll、rtl60.dll。
+
+インポートされる可能性のある別のDLL：BORLNDMM.DLL。
+
+\subsubsection{Delphi}
+
+ほぼすべてのDelphi実行可能ファイルは、コードセグメントの開始時に他の型名と一緒に「Boolean」テキスト文字列を持ちます。
+
+これはDelphiプログラムの\TT{CODE}セグメントの非常に典型的な開始部分で、このブロックはwin32 PEファイルヘッダーの直後に来ます：
+
+\lstinputlisting{digging_into_code/identification/delphi.txt}
+
+データセグメント（\TT{DATA}）の最初の4バイトは\TT{00 00 00 00}、\TT{32 13 8B C0}、または\TT{FF FF FF FF}です。%
+
+この情報は、パック/暗号化されたDelphi実行可能ファイルを扱う際に有用です。
+
+\subsection{その他の既知のDLL}
+
+\myindex{OpenMP}
+\begin{itemize}
+\item vcomp*.dll---MicrosoftのOpenMP実装。
+\end{itemize}

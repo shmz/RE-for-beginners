@@ -1,0 +1,50 @@
+\mysection{疑わしいコードパターン}
+
+\subsection{XOR命令}
+\myindex{x86!\Instructions!XOR}
+
+\TT{XOR op, op}のような命令（例：\TT{XOR EAX, EAX}）は通常、レジスタ値をゼロに設定するために使用されますが、オペランドが異なる場合、「排他的論理和」演算が実行されます。
+
+この演算は一般的なプログラミングでは稀ですが、アマチュアのものを含む暗号化で広く使用されています。
+特に第2オペランドが大きな数字の場合は疑わしいです。
+
+これは暗号化/復号化、チェックサム計算などを指している可能性があります。\\
+\\
+
+この観察に対する注目すべき例外の一つは「カナリア」（\myref{subsec:BO_protection}）です。
+その生成とチェックはしばしば\XOR命令を使用して行われます。\\
+\\
+\myindex{AWK}
+
+このAWKスクリプトは、\IDA{}リスティング（.lst）ファイルの処理に使用できます：
+
+\lstinputlisting{digging_into_code/awk.sh}
+
+この種のスクリプトは、正しく逆アセンブルされていないコード（\myref{sec:incorrectly_disasmed_code}）にも誤ってマッチする可能性があることも注目に値します。
+
+\subsection{手書きアセンブリコード}
+
+\myindex{Function prologue}
+\myindex{Function epilogue}
+\myindex{x86!\Instructions!LOOP}
+\myindex{x86!\Instructions!RCL}
+
+現代のコンパイラは\TT{LOOP}と\TT{RCL}命令を出力しません。
+一方、これらの命令は、アセンブリ言語で直接コーディングすることを好むコーダーによく知られています。
+これらを見つけた場合、このコード片が手書きされた可能性が高いと言えます。
+そのような命令は、この付録の命令リストで（M）とマークされています：\myref{sec:x86_instructions}。
+
+\par
+
+また、関数のプロローグ/エピローグは手書きアセンブリには一般的に存在しません。
+\par
+
+一般的に、手書きコードでは関数に引数を渡すための固定システムはありません。
+
+\par
+Windows 2003カーネル（ntoskrnl.exeファイル）からの例：
+
+\lstinputlisting[style=customasmx86]{digging_into_code/ntoskrnl.lst}
+
+実際、\ac{WRK} v1.2ソースコードを見ると、このコードは\\
+\IT{WRK-v1.2\textbackslash{}base\textbackslash{}ntos\textbackslash{}ke\textbackslash{}i386\textbackslash{}cpu.asm}ファイルで簡単に見つけることができます。

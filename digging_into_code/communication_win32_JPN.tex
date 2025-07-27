@@ -1,0 +1,123 @@
+\mysection{外部世界との通信 (win32)}
+
+時々、何をするかを理解するために、いくつかの関数の入力と出力を観察するだけで十分です。
+そうすることで時間を節約できます。
+
+ファイルとレジストリアクセス：
+非常に基本的な分析には、SysInternalsのProcess Monitor\footnote{\url{http://go.yurichev.com/17301}}
+ユーティリティが役立ちます。
+
+ネットワークアクセスの基本的な分析には、Wireshark\footnote{\url{http://go.yurichev.com/17303}}が有用です。
+
+しかし、それでもどこかで内部を見る必要があります。\\
+\\
+最初に探すべきことは、\ac{OS}の\ac{API}と標準ライブラリのどの関数が使用されているかです。
+
+プログラムがメイン実行可能ファイルとDLLファイルのグループに分割されている場合、これらのDLL内の関数名が時々役立つことがあります。
+
+特定のテキストで\TT{MessageBox()}への呼び出しにつながる可能性があるものに正確に興味がある場合、
+データセグメント内でこのテキストを見つけ、それへの参照を見つけ、興味のある\TT{MessageBox()}呼び出しに制御が渡される可能性のあるポイントを見つけることができます。
+
+\myindex{\CStandardLibrary!rand()}
+ビデオゲームについて話していて、その中でどのイベントが多かれ少なかれランダムであるかに興味がある場合、
+\rand関数やその置き換え（Mersenne twisterアルゴリズムなど）を見つけ、これらの関数が呼び出される場所、より重要なことに、結果がどのように使用されるかを見つけることができます。
+% BUG in varioref: http://tex.stackexchange.com/questions/104261/varioref-vref-or-vpageref-at-page-boundary-may-loop
+一例：\ref{chap:color_lines}。
+
+しかし、それがゲームではなく、\randがまだ使用されている場合、その理由を知ることも興味深いです。
+データ圧縮アルゴリズムにおける予期しない\rand使用のケースがあります（暗号化の模倣のため）：
+\href{http://go.yurichev.com/17221}{blog.yurichev.com}。
+
+\subsection{Windows APIでよく使用される関数}
+
+これらの関数はインポートされた関数の中にあるかもしれません。
+プログラマーによって書かれたコードですべての関数が使用されるわけではないことに注意する価値があります。
+多くの関数がライブラリ関数と\ac{CRT}コードから呼び出される可能性があります。
+
+一部の関数には、ASCII版の\GTT{-A}サフィックスとUnicode版の\GTT{-W}サフィックスがあります。
+
+\begin{itemize}
+
+\item
+レジストリアクセス (advapi32.dll): 
+RegEnumKeyEx, RegEnumValue, RegGetValue, RegOpenKeyEx, RegQueryValueEx。
+
+\item
+テキスト.iniファイルへのアクセス (kernel32.dll): 
+GetPrivateProfileString。
+
+\item
+ダイアログボックス (user32.dll): 
+MessageBox, MessageBoxEx, CreateDialog, SetDlgItemText, GetDlgItemText。
+
+\item
+リソースアクセス (\myref{PEresources}): (user32.dll): LoadMenu。
+
+\item
+TCP/IPネットワーキング (ws2\_32.dll):
+WSARecv, WSASend。
+
+\item
+ファイルアクセス (kernel32.dll):
+CreateFile, ReadFile, ReadFileEx, WriteFile, WriteFileEx。
+
+\item
+インターネットへの高レベルアクセス (wininet.dll): WinHttpOpen。
+
+\item
+実行可能ファイルのデジタル署名チェック (wintrust.dll):
+WinVerifyTrust。
+
+\item
+標準MSVCライブラリ（動的にリンクされている場合） (msvcr*.dll):
+assert, itoa, ltoa, open, printf, read, strcmp, atol, atoi, fopen, fread, fwrite, memcmp, rand,
+strlen, strstr, strchr。
+
+\end{itemize}
+
+\subsection{試用期間の延長}
+
+レジストリアクセス関数は、インストール日時をレジストリに保存する可能性のあるソフトウェアの試用期間をクラックしようとする人々の頻繁なターゲットです。
+
+もう一つの人気のあるターゲットは、GetLocalTime()とGetSystemTime()関数です：
+試用版ソフトウェアは、起動のたびに現在の日時を何らかの方法でチェックする必要があります。
+
+\subsection{ナグダイアログボックスの削除}
+
+ナグダイアログボックスをポップアップさせる原因を見つける一般的な方法は、MessageBox()、
+CreateDialog()、CreateWindow()関数をインターセプトすることです。
+
+\subsection{tracer: 特定のモジュール内のすべての関数をインターセプト}
+\myindex{tracer}
+
+\myindex{x86!\Instructions!INT3}
+\tracerには一度だけトリガーされるINT3ブレークポイントがありますが、特定のDLL内のすべての関数に設定できます。
+
+\begin{lstlisting}
+--one-time-INT3-bp:somedll.dll!.*
+\end{lstlisting}
+
+または、名前に\TT{xml}プレフィックスを持つすべての関数にINT3ブレークポイントを設定しましょう：
+
+\begin{lstlisting}
+--one-time-INT3-bp:somedll.dll!xml.*
+\end{lstlisting}
+
+コインの裏側として、そのようなブレークポイントは一度だけトリガーされます。
+Tracerは関数の呼び出しを表示しますが、起こった場合でも一度だけです。
+別の欠点は、関数の引数を見ることができないことです。
+
+それにもかかわらず、この機能は、プログラムがDLLを使用していることを知っているが、実際にどの関数が使用されているかわからない場合に非常に有用です。
+そして多くの関数があります。
+
+\par
+\myindex{Cygwin}
+例えば、cygwinのuptimeユーティリティが何を使用するかを見てみましょう：
+
+\begin{lstlisting}
+tracer -l:uptime.exe --one-time-INT3-bp:cygwin1.dll!.*
+\end{lstlisting}
+
+したがって、少なくとも一度呼び出されたすべてのcygwin1.dllライブラリ関数と、どこから呼び出されたかを見ることができます：
+
+\lstinputlisting{digging_into_code/uptime_cygwin.txt}

@@ -1,0 +1,50 @@
+\subsection{正しく逆アセンブルされていないコード}
+\label{sec:incorrectly_disasmed_code}
+
+実践的なリバースエンジニアは、しばしば正しく逆アセンブルされていないコードを扱わなければなりません。
+
+\subsubsection{間違った開始点からの逆アセンブル (x86)}
+
+ARM や MIPS（どの命令も2または4バイトの長さを持つ）とは異なり、x86命令は可変長であるため、x86命令の途中から開始する逆アセンブラは間違った結果を生成する可能性があります。
+
+例として：
+
+\lstinputlisting[style=customasmx86]{\CURPATH/x86_wrong_start_EN.asm}
+
+最初に正しく逆アセンブルされていない命令がありますが、最終的に逆アセンブラは正しい軌道に乗ります。
+
+\subsubsection{ランダムノイズはどのように逆アセンブルされるか？}
+
+簡単に見つけることができる共通の特性：
+
+\begin{itemize}
+\item 異常に大きな命令の分散。
+\myindex{x86!\Instructions!PUSH}
+\myindex{x86!\Instructions!MOV}
+\myindex{x86!\Instructions!CALL}
+\myindex{x86!\Instructions!IN}
+\myindex{x86!\Instructions!OUT}
+最も頻繁なx86命令は\PUSH{}、\MOV{}、\CALL{}ですが、
+ここではすべての命令グループからの命令を見ます：\ac{FPU}命令、\INS{IN}/\INS{OUT}命令、稀でシステム命令、
+すべてが一つの場所に混在しています。
+
+\item 大きくランダムな値、オフセット、即値。
+
+\item 不正なオフセットを持つジャンプ、しばしば他の命令の途中にジャンプ。
+\end{itemize}
+
+\lstinputlisting[caption=\randomNoise{} (x86),style=customasmx86]{\CURPATH/x86.asm}
+
+\myindex{x86-64}
+\lstinputlisting[caption=\randomNoise{} (x86-64),style=customasmx86]{\CURPATH/x64.asm}
+
+\myindex{ARM}
+\lstinputlisting[caption=\randomNoise{} (ARM (\ARMMode)),style=customasmARM]{\CURPATH/ARM.asm}
+
+\lstinputlisting[caption=\randomNoise{} (ARM (\ThumbMode)),style=customasmARM]{\CURPATH/ARM_thumb.asm}
+
+\myindex{MIPS}
+\lstinputlisting[caption=\randomNoise{} (MIPS little endian),style=customasmMIPS]{\CURPATH/MIPS.asm}
+
+巧妙に構築されたアンパックおよび復号化コード（自己変更を含む）も、ノイズのように見える可能性があるが、それでも正しく実行される可能性があることを心に留めておくことも重要です。
+% TODO таких примеров тоже бы добавить

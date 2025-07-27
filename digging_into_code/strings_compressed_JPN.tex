@@ -1,0 +1,102 @@
+\mysection{圧縮データの真ん中にあるテキスト文字列}
+
+\myindex{Linux kernel}
+Linuxカーネルをダウンロードして、圧縮データの真ん中に英語の単語を見つけることができます：
+
+\begin{lstlisting}
+% wget https://www.kernel.org/pub/linux/kernel/v4.x/linux-4.10.2.tar.gz
+
+% xxd -g 1 -seek 0x515c550 -l 0x30 linux-4.10.2.tar.gz
+
+0515c550: c5 59 43 cf 41 27 85 54 35 4a 57 90 73 89 b7 6a  .YC.A'.T5JW.s..j
+0515c560: 15 af 03 db 20 df 6a 51 f9 56 49 52 55 53 3d da  .... .jQ.VIRUS=.
+0515c570: 0e b9 29 24 cc 6a 38 e2 78 66 09 33 72 aa 88 df  ..)$.j8.xf.3r...
+\end{lstlisting}
+
+\begin{lstlisting}
+% wget https://cdn.kernel.org/pub/linux/kernel/v2.3/linux-2.3.3.tar.bz2
+
+% xxd -g 1 -seek 0xa93086 -l 0x30 linux-2.3.3.tar.bz2
+
+00a93086: 4d 45 54 41 4c cd 44 45 2d 2c 41 41 54 94 8b a1  METAL.DE-,AAT...
+00a93096: 5d 2b d8 d0 bd d8 06 91 74 ab 41 a0 0a 8a 94 68  ]+......t.A....h
+00a930a6: 66 56 86 81 68 0d 0e 25 6b b6 80 a4 28 1a 00 a4  fV..h..%k...(...
+\end{lstlisting}
+
+圧縮形式のLinuxカーネルパッチの一つには「Linux」という単語自体があります：
+
+\begin{lstlisting}
+% wget https://cdn.kernel.org/pub/linux/kernel/v4.x/testing/patch-4.6-rc4.gz
+
+% xxd -g 1 -seek 0x4d03f -l 0x30 patch-4.6-rc4.gz
+
+0004d03f: c7 40 24 bd ae ef ee 03 2c 95 dc 65 eb 31 d3 f1  .@$.....,..e.1..
+0004d04f: 4c 69 6e 75 78 f2 f3 70 3c 3a bd 3e bd f8 59 7e  Linux..p<:.>..Y~
+0004d05f: cd 76 55 74 2b cb d5 af 7a 35 56 d7 5e 07 5a 67  .vUt+...z5V.^.Zg
+\end{lstlisting}
+
+他の圧縮されたLinuxカーネルツリーで見つけた他の英語の単語：
+
+\begin{lstlisting}
+linux-4.6.2.tar.gz: [maybe] at 0x68e78ec
+linux-4.10.14.tar.xz: [OCEAN] at 0x6bf0a8
+linux-4.7.8.tar.gz: [FUNNY] at 0x29e6e20
+linux-4.6.4.tar.gz: [DRINK] at 0x68dc314
+linux-2.6.11.8.tar.bz2: [LUCKY] at 0x1ab5be7
+linux-3.0.68.tar.gz: [BOOST] at 0x11238c7
+linux-3.0.16.tar.bz2: [APPLE] at 0x34c091
+linux-3.0.26.tar.xz: [magic] at 0x296f7d9
+linux-3.11.8.tar.bz2: [TRUTH] at 0xf635ba
+linux-3.10.11.tar.bz2: [logic] at 0x4a7f794
+\end{lstlisting}
+
+\myindex{Apophenia}
+\myindex{Pareidolia}
+\myindex{Lurkmore}
+アポフェニアとパレイドリア（雲に顔を見る人間の心の能力など）の素晴らしい例があります
+ロシアのEncyclopedia Dramaticaの対応物であるLurkmoreに、アポフェニアとパレイドリアの素晴らしい例があります。
+電子音声現象についての記事\footnote{\url{http://archive.is/gYnFL}}で書かれているように、
+十分に長い圧縮ファイルをヘキサエディターで開き、よく知られた3文字のロシア語の卑猥な単語を見つけることができ、たくさん見つけることができます：しかし、それは何も意味せず、単なる偶然の一致です。
+
+そして、すべての可能な3文字、4文字などの単語を含むためには、圧縮ファイルがどれくらい大きくなければならないかの計算に興味がありました。
+私の素朴な計算では、最大エントロピーを持つ圧縮データストリームの真ん中での最初の特定バイトの確率は$\frac{1}{256}$、2番目の確率も$\frac{1}{256}$、
+特定バイトペアの確率は$\frac{1}{256 \cdot 256} = \frac{1}{256^2}$です。
+特定の3つ組の確率は$\frac{1}{256^3}$です。
+ファイルが最大エントロピーを持ち（これはほぼ達成不可能ですが...）、理想的な世界に住んでいる場合、サイズがちょうど$256^3=16777216$（16-17MB）のファイルが必要です。
+\myindex{rafind2}
+チェックできます：任意の圧縮ファイルを取得し、\IT{rafind2}を使用して任意の3文字の単語（ロシア語の卑猥な単語だけでなく）を検索してください。
+
+ダウンロードした映画/TVシリーズファイルの$\approx$ 8-9GBで「beer」という単語を見つけるのに必要でした（大文字小文字を区別）。
+おそらく、これらの映画は十分に圧縮されていませんでした？
+これは、よく知られた4文字の英語の卑猥な単語についても当てはまります。
+
+私のアプローチは素朴なので、数学的に根拠のあるものをグーグル検索し、この質問を見つけました：
+「ランダムビットシーケンスにおける連続する1のシーケンスまでの時間」
+\footnote{\url{http://math.stackexchange.com/questions/27989/time-until-a-consecutive-sequence-of-ones-in-a-random-bit-sequence/27991#27991}}。
+答えは：$(p^{−n}−1)/(1−p)$、ここで$p$は各イベントの確率、$n$は連続するイベントの数です。
+$\frac{1}{256}$と$3$を代入すると、私の素朴な計算とほぼ同じになります。
+
+したがって、任意の3文字の単語は、長さ$256^3 = \approx 17MB$の（理想的なエントロピーを持つ）圧縮ファイルで見つけることができ、任意の4文字の単語は$256^4 = 4.7GB$（DVDのサイズ）です。
+任意の5文字の単語は$256^5 = \approx 1TB$です。
+
+あなたが現在読んでいるテキストの部分について、私は\href{https://www.kernel.org/}{kernel.org}ウェブサイト全体をミラーリングしました（うまくいけば、システム管理者は私を許してくれるでしょう）、
+そして、それには圧縮されたLinux Kernelソースツリーの$\approx$ 430GBがあります。
+これらの単語を含むのに十分な圧縮データがありますが、私は少しズルをしました：小文字と大文字の両方の文字列を検索したため、必要な圧縮データセットはほぼ半分になりました。
+
+これは考えるべき非常に興味深いことです：最大エントロピーを持つ1TBの圧縮データには、すべての可能な5バイトチェーンがありますが、データはチェーン自体ではなく、チェーンの順序でエンコードされています（圧縮アルゴリズムなどに関係なく）。
+
+ギャンブラーのための情報：6のペアを得るためにはサイコロを$\approx 42$回振る必要がありますが、それがいつ正確に起こるかは誰も教えてくれません。
+\myindex{Rosencrantz \& Guildenstern Are Dead}
+「Rosencrantz \& Guildenstern Are Dead」映画でコインが何回投げられたかは覚えていませんが、$\approx 2048$回投げると、ある時点で10回連続で表が出て、
+別の時点で10回連続で裏が出ます。再び、それがいつ正確に起こるかは誰も教えてくれません。
+
+圧縮データもランダムデータのストリームとして扱うことができるため、確率などを決定するために同じ数学を使用できます。
+
+「bEeR」のような大文字小文字が混在する文字列で満足できる場合、確率と圧縮データセットははるかに低くなります：
+大文字小文字が混在するすべての3文字の単語に対して$128^3=2MB$、
+すべての4文字の単語に対して$128^4=268MB$、
+すべての5文字の単語に対して$128^5=34GB$、など。
+
+\myindex{Jorge Luis Borges}
+話の教訓：パターンを検索する場合、圧縮ブロブの真ん中でそれを見つけることができますが、それは偶然の一致以外の何も意味しません。
+哲学的な意味では、これは選択/確認バイアスのケースです：「バベルの図書館」\footnote{Jorge Luis Borgesによる短編小説}で探しているものを見つけます。

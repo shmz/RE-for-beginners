@@ -1,0 +1,121 @@
+% TODO move section...
+
+\subsection{いくつかのバイナリファイルパターン}
+
+ここのすべての例は、コンソールでアクティブなコードページ437
+\footnote{\url{https://en.wikipedia.org/wiki/Code_page_437}}を持つWindowsで準備されました。
+別のコードページが設定されている場合、バイナリファイルは内部的に視覚的に異なって見える可能性があります。
+
+\clearpage
+\subsubsection{配列}
+
+時々、ヘキサエディターで16/32/64ビット値の配列を視覚的に明確に見つけることができます。
+
+これは16ビット値の配列の例です。
+ペアの最初のバイトが7または8で、2番目がランダムに見えることがわかります：
+
+\begin{figure}[H]
+\centering
+\myincludegraphics{digging_into_code/binary/16bit_array.png}
+\caption{FAR: 16ビット値の配列}
+\end{figure}
+
+16ビット\ac{ADC}を使用してデジタル化された12チャンネル信号を含むファイルを使用しました。
+
+\clearpage
+\myindex{MIPS}
+\par そして、これは非常に典型的なMIPSコードの例です。
+
+思い出すかもしれませんが、すべてのMIPS（およびARMモードまたはARM64のARM）命令は32ビット（または4バイト）のサイズを持つため、このようなコードは32ビット値の配列です。
+
+このスクリーンショットを見ることで、何らかのパターンを見ることができます。
+
+明確さのために垂直の赤い線が追加されています：
+
+\begin{figure}[H]
+\centering
+\myincludegraphics{digging_into_code/binary/typical_MIPS_code.png}
+\caption{Hiew: 非常に典型的なMIPSコード}
+\end{figure}
+
+このようなパターンの別の例は、この本にあります：
+\myref{Oracle_SYM_files_example}。
+
+\clearpage
+\subsubsection{スパースファイル}
+
+これは、ほぼ空のファイルの中にデータが散在するスパースファイルです。
+ここの各スペース文字は実際にはゼロバイト（スペースのように見える）です。
+これはFPGA（Altera Stratix GXデバイス）をプログラムするためのファイルです。
+もちろん、このようなファイルは簡単に圧縮できますが、このような形式は、効率的なアクセスが重要でコンパクトさが重要でない科学および工学ソフトウェアで非常に人気があります。
+
+\begin{figure}[H]
+\centering
+\myincludegraphics{digging_into_code/binary/sparse_FPGA.png}
+\caption{FAR: スパースファイル}
+\end{figure}
+
+\clearpage
+\subsubsection{圧縮ファイル}
+
+% FIXME \ref{} ->
+このファイルは単なる圧縮アーカイブです。
+比較的高いエントロピーを持ち、視覚的には混沌として見えます。
+これは圧縮および/または暗号化されたファイルがどのように見えるかです。
+
+\begin{figure}[H]
+\centering
+\myincludegraphics{digging_into_code/binary/compressed.png}
+\caption{FAR: 圧縮ファイル}
+\end{figure}
+
+\clearpage
+\subsubsection{\ac{CDFS}}
+
+\ac{OS}インストールは通常、CD/DVDディスクのコピーであるISOファイルとして配布されます。
+使用されるファイルシステムは\ac{CDFS}と呼ばれ、ここでは追加データと混在するファイル名が見えます。
+これはファイルサイズ、他のディレクトリへのポインタ、ファイル属性などです。
+これは典型的なファイルシステムが内部的にどのように見えるかです。
+
+\begin{figure}[H]
+\centering
+\myincludegraphics{digging_into_code/binary/cdfs.png}
+\caption{FAR: ISOファイル: Ubuntu 15 インストール\ac{CD}}
+\end{figure}
+
+\clearpage
+\subsubsection{32ビットx86実行可能コード}
+
+これは32ビットx86実行可能コードがどのように見えるかです。
+一部のバイトが他のバイトよりも頻繁に発生するため、非常に高いエントロピーを持ちません。
+
+\begin{figure}[H]
+\centering
+\myincludegraphics{digging_into_code/binary/x86_32.png}
+\caption{FAR: 実行可能32ビットx86コード}
+\end{figure}
+
+% TODO: Read more about x86 statistics: \ref{}. % FIXME blog post about decryption...
+
+\clearpage
+\subsubsection{BMPグラフィックスファイル}
+
+% TODO: bitmap, bit, group of bits...
+
+BMPファイルは圧縮されていないため、各バイト（またはバイトのグループ）が各ピクセルを記述します。
+インストールされたWindows 8.1の中のどこかでこの画像を見つけました：
+
+\begin{figure}[H]
+\centering
+\myincludegraphicsSmall{digging_into_code/binary/bmp.png}
+\caption{例の画像}
+\end{figure}
+
+この画像には非常に良く圧縮できそうにないピクセル（中央周辺）がありますが、上部と下部に長い単色線があることがわかります。
+実際、このような線はファイルを表示する際にも線として見えます：
+
+\begin{figure}[H]
+\centering
+\myincludegraphics{digging_into_code/binary/bmp_FAR.png}
+\caption{BMPファイルの断片}
+\end{figure}

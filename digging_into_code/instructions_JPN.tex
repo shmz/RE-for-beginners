@@ -1,0 +1,103 @@
+\mysection{適切な命令を見つける}
+
+プログラムがFPU命令を使用しており、コード内にそれらがほとんどない場合、
+デバッガで各命令を手動でチェックしてみることができます。
+
+\par 例えば、Microsoft Excelがユーザーが入力した数式をどのように計算するかに興味があるかもしれません。
+例えば、除算操作について。
+
+\myindex{\GrepUsage}
+\myindex{x86!\Instructions!FDIV}
+
+excel.exe（Office 2010の）バージョン14.0.4756.1000を\IDAにロードし、完全なリストを作成して、すべての\FDIV命令を見つけます（第2オペランドとして定数を使用するものを除く。明らかにそれらは適さない）：
+
+\begin{lstlisting}
+cat EXCEL.lst | grep fdiv | grep -v dbl_ > EXCEL.fdiv
+\end{lstlisting}
+
+\dots そうすると、それらが144個あることがわかります。
+
+\par Excelに\TT{=(1/3)}のような文字列を入力し、各命令をチェックできます。
+
+\myindex{tracer}
+
+\par デバッガまたは\tracerで各命令をチェックすることで
+（一度に4つの命令をチェックできる）、
+運良く求めていた命令がたった14番目にありました：
+
+\begin{lstlisting}[style=customasmx86]
+.text:3011E919 DC 33          fdiv    qword ptr [ebx]
+\end{lstlisting}
+
+\begin{lstlisting}
+PID=13944|TID=28744|(0) 0x2f64e919 (Excel.exe!BASE+0x11e919)
+EAX=0x02088006 EBX=0x02088018 ECX=0x00000001 EDX=0x00000001
+ESI=0x02088000 EDI=0x00544804 EBP=0x0274FA3C ESP=0x0274F9F8
+EIP=0x2F64E919
+FLAGS=PF IF
+FPU ControlWord=IC RC=NEAR PC=64bits PM UM OM ZM DM IM 
+FPU StatusWord=
+FPU ST(0): 1.000000
+\end{lstlisting}
+
+\ST{0}は第1引数（1）を保持し、第2引数は\TT{[EBX]}にあります。\\
+\\
+\myindex{x86!\Instructions!FDIV}
+
+\FDIVの後の命令（\TT{FSTP}）は結果をメモリに書き込みます：\\
+
+\begin{lstlisting}[style=customasmx86]
+.text:3011E91B DD 1E          fstp    qword ptr [esi]
+\end{lstlisting}
+
+そこにブレークポイントを設定すると、結果を見ることができます：
+
+\begin{lstlisting}
+PID=32852|TID=36488|(0) 0x2f40e91b (Excel.exe!BASE+0x11e91b)
+EAX=0x00598006 EBX=0x00598018 ECX=0x00000001 EDX=0x00000001
+ESI=0x00598000 EDI=0x00294804 EBP=0x026CF93C ESP=0x026CF8F8
+EIP=0x2F40E91B
+FLAGS=PF IF
+FPU ControlWord=IC RC=NEAR PC=64bits PM UM OM ZM DM IM 
+FPU StatusWord=C1 P 
+FPU ST(0): 0.333333
+\end{lstlisting}
+
+また、実用的なジョークとして、その場で変更することもできます：
+
+\begin{lstlisting}
+tracer -l:excel.exe bpx=excel.exe!BASE+0x11E91B,set(st0,666)
+\end{lstlisting}
+
+\begin{lstlisting}
+PID=36540|TID=24056|(0) 0x2f40e91b (Excel.exe!BASE+0x11e91b)
+EAX=0x00680006 EBX=0x00680018 ECX=0x00000001 EDX=0x00000001
+ESI=0x00680000 EDI=0x00395404 EBP=0x0290FD9C ESP=0x0290FD58
+EIP=0x2F40E91B
+FLAGS=PF IF
+FPU ControlWord=IC RC=NEAR PC=64bits PM UM OM ZM DM IM 
+FPU StatusWord=C1 P 
+FPU ST(0): 0.333333
+Set ST0 register to 666.000000
+\end{lstlisting}
+
+Excelはセルに666を表示し、最終的に適切なポイントを見つけたことを確信させてくれます。
+
+\begin{figure}[H]
+\centering
+\includegraphics[width=0.6\textwidth]{digging_into_code/Excel_prank.png}
+\caption{実用的なジョークが成功した}
+\end{figure}
+
+同じExcelバージョンをx64で試すと、
+そこには12個の\FDIV命令しか見つからず、
+探している命令は3番目のものです。
+
+\begin{lstlisting}
+tracer.exe -l:excel.exe bpx=excel.exe!BASE+0x1B7FCC,set(st0,666)
+\end{lstlisting}
+
+\myindex{x86!\Instructions!DIVSD}
+
+\Tfloatと\Tdouble型の多くの除算操作が、コンパイラによって\TT{DIVSD}のようなSSE命令に置き換えられたようです
+（\TT{DIVSD}は合計268回存在します）。

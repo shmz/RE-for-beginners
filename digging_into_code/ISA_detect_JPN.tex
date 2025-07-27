@@ -1,0 +1,21 @@
+\mysection{\ac{ISA} 検出}
+\label{ISA_detect}
+
+多くの場合、未知の\ac{ISA}用のバイナリファイルを扱うことがあります。
+おそらく、\ac{ISA}を検出する最も簡単な方法は、IDA、objdump、または他の逆アセンブラで様々なものを試すことです。
+
+これを実現するためには、正しく逆アセンブルされたコードと正しくないものの違いを理解する必要があります。
+
+% subsection:
+\renewcommand{\CURPATH}{digging_into_code/incorrect_disassembly}
+\input{digging_into_code/incorrect_disassembly/main_EN}
+
+\subsection{正しく逆アセンブルされたコード}
+\label{correctly_disasmed_code}
+
+各\ac{ISA}には、最もよく使われる命令が十数個あり、残りの命令ははるかに使用頻度が低いです。
+
+x86については、関数呼び出し（\PUSH/\CALL/\ADD）と\MOV命令が、私たちが使用するほぼすべてのプログラムで最も頻繁に実行されるコード片であるという事実を知ることは興味深いです。
+言い換えれば、\ac{CPU}は抽象化レベル間での情報の受け渡しに非常に忙しく、または、これらのレベル間の切り替えに非常に忙しいと言えます。
+\ac{ISA}の種類に関係なく。
+これは、問題を複数の抽象化レベルに分割すること（人間がより簡単に作業できるように）のコストです。

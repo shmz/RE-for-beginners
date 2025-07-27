@@ -1,0 +1,184 @@
+\mysection{定数}
+
+プログラマーを含む人間は、実生活でもコード内でも、10、100、1000のような切りの良い数字をよく使用します。
+
+実践的なリバースエンジニアは通常、16進表現でそれらをよく知っています：
+10=0xA、100=0x64、1000=0x3E8、10000=0x2710。
+
+定数\TT{0xAAAAAAAA} (0b10101010101010101010101010101010) と \\
+\TT{0x55555555} (0b01010101010101010101010101010101) も人気があります。これらは交互のビットで構成されています。
+
+これは、すべてのビットがオン（0b1111 \dots）またはオフ（0b0000 \dots）である信号から何らかの信号を区別するのに役立ちます。
+例えば、\TT{0x55AA}定数は少なくともブートセクター、\ac{MBR}、
+およびIBM互換拡張カードの\ac{ROM}で使用されます。
+
+一部のアルゴリズム、特に暗号化アルゴリズムは、\IDAを使用してコード内で簡単に見つけることができる独特の定数を使用します。
+
+\myindex{MD5}
+\newcommand{\URLMD}{http://go.yurichev.com/17111}
+
+例えば、MD5\footnote{\href{\URLMD}{wikipedia}}アルゴリズムは、このように独自の内部変数を初期化します：
+
+\begin{verbatim}
+var int h0 := 0x67452301
+var int h1 := 0xEFCDAB89
+var int h2 := 0x98BADCFE
+var int h3 := 0x10325476
+\end{verbatim}
+
+コード内でこれら4つの定数が連続して使用されているのを見つけた場合、この関数がMD5に関連している可能性が非常に高いです。
+
+\par 別の例は、CRC16/CRC32アルゴリズムです。
+その計算アルゴリズムは、しばしば次のような事前計算されたテーブルを使用します：
+
+\begin{lstlisting}[caption=linux/lib/crc16.c,style=customc]
+/** CRC table for the CRC-16. The poly is 0x8005 (x^16 + x^15 + x^2 + 1) */
+u16 const crc16_table[256] = {
+	0x0000, 0xC0C1, 0xC181, 0x0140, 0xC301, 0x03C0, 0x0280, 0xC241,
+	0xC601, 0x06C0, 0x0780, 0xC741, 0x0500, 0xC5C1, 0xC481, 0x0440,
+	0xCC01, 0x0CC0, 0x0D80, 0xCD41, 0x0F00, 0xCFC1, 0xCE81, 0x0E40,
+	...
+\end{lstlisting}
+
+CRC32の事前計算されたテーブルも参照してください：\myref{sec:CRC32}。
+
+テーブルなしのCRCアルゴリズムでは、よく知られた多項式が使用されます。例えば、CRC32の場合は0xEDB88320です。
+
+\subsection{マジックナンバー}
+\label{magic_numbers}
+
+\newcommand{\FNURLMAGIC}{\footnote{\href{http://go.yurichev.com/17112}{wikipedia}}}
+
+多くのファイル形式は、\IT{マジックナンバー}\FNURLMAGIC{}が使用される標準ファイルヘッダを定義し、単一のものまたは複数のものが使用されます。
+
+\myindex{MS-DOS}
+
+例えば、すべてのWin32とMS-DOS実行可能ファイルは「MZ」\footnote{\href{http://go.yurichev.com/17113}{wikipedia}}の2文字で始まります。
+
+\myindex{MIDI}
+
+MIDIファイルの先頭には「MThd」署名が存在する必要があります。
+何かにMIDIファイルを使用するプログラムがある場合、
+少なくとも最初の4バイトをチェックしてファイルの有効性をチェックする必要がある可能性が非常に高いです。
+
+これは次のように行うことができます：
+（\IT{buf}はメモリ内のロードされたファイルの先頭を指す）
+
+\begin{lstlisting}[style=customasmx86]
+cmp [buf], 0x6468544D ; "MThd"
+jnz _error_not_a_MIDI_file
+\end{lstlisting}
+
+\myindex{\CStandardLibrary!memcmp()}
+\myindex{x86!\Instructions!CMPSB}
+
+\dots または\TT{memcmp()}のようなメモリブロックを比較する関数を呼び出すか、\TT{CMPSB} (\myref{REPE_CMPSx})命令までの他の同等のコードによって。
+
+そのようなポイントを見つけると、MIDIファイルのロードがどこから始まるかをすでに言うことができ、また、MIDIファイルの内容を持つバッファの場所、バッファから何が使用されるか、どのように使用されるかを見ることができます。
+
+\subsubsection{日付}
+
+\myindex{UFS2}
+\myindex{FreeBSD}
+\myindex{HASP}
+
+しばしば、\TT{0x19870116}のような数字に遭遇することがあります。これは明らかに日付（1987年、1月（1月）、16日）のように見えます。
+これは誰かの誕生日（プログラマー、その親戚、子供）、または他の重要な日付かもしれません。
+日付は\TT{0x16011987}のように逆順で書かれることもあります。
+\TT{0x01161987}のようなアメリカ式の日付も人気があります。
+
+よく知られた例は\TT{0x19540119}（UFS2スーパーブロック構造で使用されるマジックナンバー）で、これは著名なFreeBSD貢献者であるMarshall Kirk McKusickの誕生日です。
+
+\myindex{Stuxnet}
+Stuxnetは「19790509」という数字を使用し（32ビット数としてではなく、文字列として）、これがマルウェアがイスラエルと関連しているという憶測につながりました
+\footnote{これはペルシア系ユダヤ人Habib Elghanianの処刑日です。}
+
+また、そのような数字はアマチュアレベルの暗号化で非常に人気があります。例えば、HASP3ドングルの\IT{秘密関数}内部からの抜粋
+\footnote{\url{https://web.archive.org/web/20160311231616/http://www.woodmann.com/fravia/bayu3.htm}}：
+
+\begin{lstlisting}[style=customc]
+void xor_pwd(void) 
+{ 
+	int i; 
+	
+	pwd^=0x09071966;
+	for(i=0;i<8;i++) 
+	{ 
+		al_buf[i]= pwd & 7; pwd = pwd >> 3; 
+	} 
+};
+
+void emulate_func2(unsigned short seed)
+{ 
+	int i, j; 
+	for(i=0;i<8;i++) 
+	{ 
+		ch[i] = 0; 
+		
+		for(j=0;j<8;j++)
+		{ 
+			seed *= 0x1989; 
+			seed += 5; 
+			ch[i] |= (tab[(seed>>9)&0x3f]) << (7-j); 
+		}
+	} 
+}
+\end{lstlisting}
+
+\subsubsection{DHCP}
+
+これはネットワークプロトコルにも適用されます。
+例えば、DHCPプロトコルのネットワークパケットには、いわゆる\IT{マジッククッキー}：\TT{0x63538263}が含まれています。
+DHCPパケットを生成するコードは、どこかでこの定数をパケットに埋め込む必要があります。
+コード内でそれを見つけることができれば、これがどこで起こるかを見つけることができ、それだけではありません。
+DHCPパケットを受信できるプログラムは、\IT{マジッククッキー}を検証し、定数と比較する必要があります。
+
+例えば、Windows 7 x64のdhcpcore.dllファイルを取り、定数を検索してみましょう。
+そして、それを2回見つけることができます：
+定数は記述的な名前を持つ2つの関数で使用されているようです\\
+\TT{DhcpExtractOptionsForValidation()}と\TT{DhcpExtractFullOptions()}：
+
+\begin{lstlisting}[caption=dhcpcore.dll (Windows 7 x64),style=customasmx86]
+.rdata:000007FF6483CBE8 dword_7FF6483CBE8 dd 63538263h          ; DATA XREF: DhcpExtractOptionsForValidation+79
+.rdata:000007FF6483CBEC dword_7FF6483CBEC dd 63538263h          ; DATA XREF: DhcpExtractFullOptions+97
+\end{lstlisting}
+
+そして、これらの定数がアクセスされる場所は次のとおりです：
+
+\begin{lstlisting}[caption=dhcpcore.dll (Windows 7 x64),style=customasmx86]
+.text:000007FF6480875F  mov     eax, [rsi]
+.text:000007FF64808761  cmp     eax, cs:dword_7FF6483CBE8
+.text:000007FF64808767  jnz     loc_7FF64817179
+\end{lstlisting}
+
+そして：
+
+\begin{lstlisting}[caption=dhcpcore.dll (Windows 7 x64),style=customasmx86]
+.text:000007FF648082C7  mov     eax, [r12]
+.text:000007FF648082CB  cmp     eax, cs:dword_7FF6483CBEC
+.text:000007FF648082D1  jnz     loc_7FF648173AF
+\end{lstlisting}
+
+\subsection{特定の定数}
+
+時々、特定のタイプのコードに対して特定の定数があります。
+例えば、著者はかつて、数字12が疑わしいほど頻繁に遭遇するコードを調査しました。
+多くの配列のサイズは12、または12の倍数（24など）です。
+それが判明したところ、そのコードは12チャンネルのオーディオファイルを入力として取り、それを処理していました。
+
+その逆もまた：例えば、プログラムが120バイトの長さのテキストフィールドで動作する場合、
+コードのどこかに定数120または119がある必要があります。
+UTF-16が使用される場合、$2 \cdot 120$です。
+コードが固定サイズのネットワークパケットで動作する場合、コード内でこの定数を検索することも良いアイデアです。
+
+これは、アマチュア暗号化（ライセンスキーなど）にも当てはまります。
+暗号化されたブロックのサイズが$n$バイトの場合、コード全体でこの数字の出現を見つけようとすることをお勧めします。
+また、実行中にループで$n$回繰り返されるコード片を見た場合、
+これは暗号化/復号化ルーチンかもしれません。
+
+\subsection{定数の検索}
+
+\IDAでは簡単です：Alt-BまたはAlt-I。
+\myindex{binary grep}
+大きなファイルの山で定数を検索する場合、または実行不可能ファイルで検索する場合、
+\IT{binary grep}\footnote{\BGREPURL}と呼ばれる小さなユーティリティがあります。
