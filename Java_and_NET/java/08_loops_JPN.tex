@@ -1,0 +1,136 @@
+% TODO proof-reading
+\subsection{ループ}
+
+\begin{lstlisting}[style=customjava]
+public class Loop
+{
+	public static void main(String[] args)
+	{ 
+		for (int i = 1; i <= 10; i++)
+		{
+			System.out.println(i); 
+		}               
+	}
+}
+\end{lstlisting}
+
+\begin{lstlisting}
+  public static void main(java.lang.String[]);
+    flags: ACC_PUBLIC, ACC_STATIC
+    Code:
+      stack=2, locals=2, args_size=1
+         0: iconst_1      
+         1: istore_1      
+         2: iload_1       
+         3: bipush        10
+         5: if_icmpgt     21
+         8: getstatic     #2         // Field java/lang/System.out:Ljava/io/PrintStream;
+        11: iload_1       
+        12: invokevirtual #3         // Method java/io/PrintStream.println:(I)V
+        15: iinc          1, 1
+        18: goto          2
+        21: return        
+\end{lstlisting}
+
+\TT{iconst\_1}は1を\ac{TOS}にロードし、\TT{istore\_1}はそれを\ac{LVA}のスロット1に格納します。
+
+なぜ0番目のスロットではないのでしょうか？
+\main関数には1つの引数（\TT{String}の配列）があり、
+それへのポインタ（または\IT{reference}）が現在0番目のスロットにあるからです。
+
+したがって、\IT{i}ローカル変数は常に1番目のスロットにあります。
+
+オフセット3と5の命令は\IT{i}と10を比較します。
+
+\IT{i}が大きい場合、実行フローは関数が終了するオフセット21に移ります。
+
+そうでなければ、\TT{println}が呼び出されます。
+
+\IT{i}はその後、\TT{println}のためにオフセット11で再ロードされます。
+
+ちなみに、\IT{integer}用の\TT{println}メソッドを呼び出しており、
+これをコメントで見ることができます：「(I)V」
+（\IT{I}は\IT{integer}を意味し、\IT{V}は戻り型が\IT{void}であることを意味します）。
+
+\TT{println}が終了すると、\IT{i}はオフセット15でインクリメントされます。
+
+命令の最初のオペランドはスロット番号（1）で、
+2番目は変数に加算する数（1）です。
+
+\TT{goto}は単なるGOTOで、ループ本体の開始であるオフセット2にジャンプします。
+
+より複雑な例に進みましょう：
+
+\begin{lstlisting}[style=customjava]
+public class Fibonacci
+{
+	public static void main(String[] args)
+	{ 
+		int limit = 20, f = 0, g = 1;
+
+		for (int i = 1; i <= limit; i++)
+		{
+			f = f + g;
+			g = f - g;
+			System.out.println(f); 
+		}
+	}
+}
+\end{lstlisting}
+
+\begin{lstlisting}
+  public static void main(java.lang.String[]);
+    flags: ACC_PUBLIC, ACC_STATIC
+    Code:
+      stack=2, locals=5, args_size=1
+         0: bipush        20
+         2: istore_1      
+         3: iconst_0      
+         4: istore_2      
+         5: iconst_1      
+         6: istore_3      
+         7: iconst_1      
+         8: istore        4
+        10: iload         4
+        12: iload_1       
+        13: if_icmpgt     37
+        16: iload_2       
+        17: iload_3       
+        18: iadd          
+        19: istore_2      
+        20: iload_2       
+        21: iload_3       
+        22: isub          
+        23: istore_3      
+        24: getstatic     #2         // Field java/lang/System.out:Ljava/io/PrintStream;
+        27: iload_2       
+        28: invokevirtual #3         // Method java/io/PrintStream.println:(I)V
+        31: iinc          4, 1
+        34: goto          10
+        37: return        
+\end{lstlisting}
+        
+これは\ac{LVA}スロットのマップです：
+
+\begin{itemize}
+\item 0 --- \mainの唯一の引数
+\item 1 --- \IT{limit}、常に20を含む
+\item 2 --- \IT{f}
+\item 3 --- \IT{g}
+\item 4 --- \IT{i}
+\end{itemize}
+
+Javaコンパイラが、ソースコードで宣言された順序と同じ順序で\ac{LVA}スロットに変数を割り当てることがわかります。
+
+スロット0、1、2、3にアクセスするための個別の\TT{istore}命令がありますが、
+4以上のスロットにはありません。そのため、オフセット8にはスロット番号をオペランドとして取る
+追加のオペランドを持つ\TT{istore}があります。
+
+オフセット10の\TT{iload}でも同じです。
+
+しかし、常に20を含む（本質的に定数である）\IT{limit}変数に別のスロットを割り当て、
+その値を頻繁に再ロードするのは疑わしいのではないでしょうか？
+
+\ac{JVM} \ac{JIT}コンパイラは通常、そのようなことを最適化するのに十分優秀です。
+
+コードへの手動介入はおそらく価値がありません。
