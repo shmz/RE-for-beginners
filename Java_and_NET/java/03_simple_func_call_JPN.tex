@@ -1,0 +1,137 @@
+% TODO proof-reading
+\subsection{シンプルな関数呼び出し}
+
+\TT{Math.random()}は[0.0 \dots 1.0)の範囲で疑似乱数を返しますが、
+何らかの理由で[0.0 \dots 0.5)の範囲で数値を返す関数を考案する必要があるとしましょう：
+
+\begin{lstlisting}[style=customjava]
+public class HalfRandom
+{ 
+	public static double f()
+	{
+		return Math.random()/2;
+	}
+}
+\end{lstlisting}
+
+\begin{lstlisting}[caption=定数プール]
+...
+   #2 = Methodref          #18.#19    //  java/lang/Math.random:()D
+   #3 = Double             2.0d
+...
+  #12 = Utf8               ()D
+...
+  #18 = Class              #22        //  java/lang/Math
+  #19 = NameAndType        #23:#12    //  random:()D
+  #22 = Utf8               java/lang/Math
+  #23 = Utf8               random
+\end{lstlisting}
+
+\begin{lstlisting}
+  public static double f();
+    flags: ACC_PUBLIC, ACC_STATIC
+    Code:
+      stack=4, locals=0, args_size=0
+         0: invokestatic  #2          // Method java/lang/Math.random:()D
+         3: ldc2_w        #3          // double 2.0d
+         6: ddiv          
+         7: dreturn       
+\end{lstlisting}
+
+\TT{invokestatic}は\TT{Math.random()}関数を呼び出し、結果を\ac{TOS}に残します。
+
+その後、結果は2.0で割られて返されます。
+
+しかし、関数名はどのようにエンコードされているのでしょうか？
+
+それは\TT{Methodref}式を使用して定数プールにエンコードされています。
+
+これはクラス名とメソッド名を定義します。
+
+\TT{Methodref}の最初のフィールドは\TT{Class}式を指しており、これは順番に
+通常のテキスト文字列（「java/lang/Math」）を指しています。
+
+2番目の\TT{Methodref}式は\TT{NameAndType}式を指しており、これも
+文字列への2つのリンクを持っています。
+
+最初の文字列は「random」で、これはメソッドの名前です。
+
+2番目の文字列は「()D」で、これは関数の型をエンコードしています。
+これは\IT{double}値を返すことを意味します（したがって文字列の\IT{D}）。
+
+これが次の方法です：
+1) JVMが型の正しさのためにデータをチェックできる；
+2) Java逆コンパイラがコンパイルされたクラスファイルからデータ型を復元できる。
+
+今度は「Hello, world!」の例を試してみましょう：
+
+\begin{lstlisting}[style=customjava]
+public class HelloWorld
+{
+	public static void main(String[] args)
+	{
+		System.out.println("Hello, World");
+	}
+}
+\end{lstlisting}
+
+\begin{lstlisting}[caption=定数プール]
+...
+   #2 = Fieldref           #16.#17        //  java/lang/System.out:Ljava/io/PrintStream;
+   #3 = String             #18            //  Hello, World
+   #4 = Methodref          #19.#20        //  java/io/PrintStream.println:(Ljava/lang/String;)V
+...
+  #16 = Class              #23            //  java/lang/System
+  #17 = NameAndType        #24:#25        //  out:Ljava/io/PrintStream;
+  #18 = Utf8               Hello, World
+  #19 = Class              #26            //  java/io/PrintStream
+  #20 = NameAndType        #27:#28        //  println:(Ljava/lang/String;)V
+...
+  #23 = Utf8               java/lang/System
+  #24 = Utf8               out
+  #25 = Utf8               Ljava/io/PrintStream;
+  #26 = Utf8               java/io/PrintStream
+  #27 = Utf8               println
+  #28 = Utf8               (Ljava/lang/String;)V
+...
+\end{lstlisting}
+
+\begin{lstlisting}
+  public static void main(java.lang.String[]);
+    flags: ACC_PUBLIC, ACC_STATIC
+    Code:
+      stack=2, locals=1, args_size=1
+         0: getstatic     #2        // Field java/lang/System.out:Ljava/io/PrintStream;
+         3: ldc           #3        // String Hello, World
+         5: invokevirtual #4        // Method java/io/PrintStream.println:(Ljava/lang/String;)V
+         8: return        
+\end{lstlisting}
+
+オフセット3の\TT{ldc}は定数プール内の「Hello, World」文字列へのポインタを取り、
+スタックにプッシュします。
+
+Javaの世界では\IT{reference}と呼ばれますが、これはむしろポインタ、またはアドレスです
+
+\footnote{C++でのポインタと\IT{reference}の違いについては：\myref{cpp_references}。}。
+
+馴染みのある\TT{invokevirtual}命令は定数プールから\TT{println}
+関数（またはメソッド）に関する情報を取得し、それを呼び出します。
+
+ご存知のように、各データ型に対して複数の\TT{println}メソッドがあります。
+
+私たちの場合は、\IT{String}データ型用の\TT{println}のバージョンです。
+
+しかし、最初の\TT{getstatic}命令はどうでしょうか？
+
+この命令はオブジェクト\TT{System.out}のフィールドの\IT{reference}（またはアドレス）を取り、
+スタックにプッシュします。
+
+この値は\TT{println}メソッドの\IT{this}ポインタのように機能します。
+
+したがって、内部的には、\TT{println}メソッドは入力として2つの引数を取ります：
+1) \IT{this}、つまりオブジェクトへのポインタ；
+2) 「Hello, World」文字列のアドレス。
+
+実際、\TT{println()}は初期化された\TT{System.out}オブジェクト内のメソッドとして呼び出されます。
+
+便宜上、\TT{javap}ユーティリティはこのすべての情報をコメントに書き込みます。

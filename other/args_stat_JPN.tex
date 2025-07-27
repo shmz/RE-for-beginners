@@ -1,0 +1,29 @@
+\mysection{関数引数数の統計}
+\label{args_stat}
+
+関数引数の平均数が何個なのかにいつも興味を持っていました。
+
+\index{UNIX!grep}
+多くのWindows 7 32ビットDLLを分析しました\\
+(crypt32.dll, mfc71.dll, msvcr100.dll, shell32.dll, 
+user32.dll, d3d11.dll, mshtml.dll, msxml6.dll, sqlncli11.dll, wininet.dll, mfc120.dll, msvbvm60.dll, ole32.dll, themeui.dll, wmp.dll) 
+（これらは\IT{stdcall}規約を使用しているため、\INS{RETN X}で逆アセンブリ出力を\IT{grep}するのが簡単です）。
+
+\begin{itemize}
+\item 引数なし: $\approx 29\%$
+\item 1引数: $\approx 23\%$
+\item 2引数: $\approx 20\%$
+\item 3引数: $\approx 11\%$
+\item 4引数: $\approx 7\%$
+\item 5引数: $\approx 3\%$
+\item 6引数: $\approx 2\%$
+\item 7引数: $\approx 1\%$
+\end{itemize}
+
+\begin{figure}[H]
+\centering
+\includegraphics[width=0.5\textwidth]{other/args_stat.png}
+\caption{関数引数数の統計}
+\end{figure}
+
+これはプログラミングスタイルに大きく依存し、他のソフトウェア製品では大きく異なる可能性があります。

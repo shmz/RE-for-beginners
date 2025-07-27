@@ -1,0 +1,48 @@
+% TODO proof-reading
+\subsection{引数の受け渡し}
+
+\TT{min()}/\TT{max()}の例を拡張してみましょう：
+
+\begin{lstlisting}[style=customjava]
+public class minmax
+{
+	public static int min (int a, int b)
+	{
+		if (a>b)
+			return b;
+		return a;
+	}
+
+	public static int max (int a, int b)
+	{
+		if (a>b)
+			return a;
+		return b;
+	}
+
+	public static void main(String[] args)
+	{
+		int a=123, b=456;
+		int max_value=max(a, b);
+		int min_value=min(a, b);
+		System.out.println(min_value);
+		System.out.println(max_value);
+	}
+}
+\end{lstlisting}
+
+これは\main関数のコードです：
+
+\begin{lstlisting}
+  public static void main(java.lang.String[]);
+    flags: ACC_PUBLIC, ACC_STATIC
+    Code:
+      stack=2, locals=5, args_size=1
+         0: bipush        123
+         2: istore_1      
+         3: sipush        456
+         6: istore_2      
+         7: iload_1       
+         8: iload_2       
+         9: invokestatic  #2       // Method max:(II)I
+        12: istore_3      

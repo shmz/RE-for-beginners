@@ -1,0 +1,19 @@
+\mysection{コンパイラ組み込み関数}
+\myindex{Compiler intrinsic}
+\label{sec:compiler_intrinsic}
+
+\myindex{x86!\Instructions!ROL}
+\myindex{x86!\Instructions!ROR}
+
+通常のライブラリ関数ではない、コンパイラ固有の関数です。
+コンパイラは、それへの呼び出しの代わりに特定の機械語コードを生成します。
+これは、特定の\ac{CPU}命令のための疑似関数であることが多いです。\\
+\\
+例えば、\CCpp言語には循環シフト演算はありませんが、ほとんどの\ac{CPU}にはそれらが存在します。
+プログラマーの便宜のために、少なくともMSVCには疑似関数
+\IT{\_rotl()}と\IT{\_rotr()}\FNMSDNROTxURL{}があり、
+これらはコンパイラによってROL/ROR x86命令に直接翻訳されます。\\
+\\
+別の例は、コード内で直接SSE命令を生成する関数です。
+
+MSVCの組み込み関数の完全なリスト：\href{http://go.yurichev.com/17254}{MSDN}。

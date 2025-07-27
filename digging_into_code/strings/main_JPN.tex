@@ -1,0 +1,179 @@
+\subsection{テキスト文字列}
+
+\subsubsection{\CCpp}
+
+\label{C_strings}
+通常のC文字列はゼロ終端（\ac{ASCIIZ}文字列）です。
+
+C文字列形式がなぜそうなっているか（ゼロ終端）の理由は明らかに歴史的なものです。
+[Dennis M. Ritchie, \IT{The Evolution of the Unix Time-sharing System}, (1979)]
+に次のように読むことができます：
+
+\begin{framed}
+\begin{quotation}
+小さな違いは、I/Oの単位がバイトではなくワードだったことです。PDP-7がワードアドレス
+マシンだったからです。実際には、これは文字ストリームを扱うすべてのプログラムがnull
+文字を無視することを意味していました。nullはファイルを偶数文字数にパディングするために使用されていたからです。
+\end{quotation}
+\end{framed}
+
+\myindex{Hiew}
+
+HiewやFAR Managerでは、これらの文字列は次のように見えます：
+
+\begin{lstlisting}[style=customc]
+int main()
+{
+	printf ("Hello, world!\n");
+};
+\end{lstlisting}
+
+\begin{figure}[H]
+\centering
+\includegraphics[width=0.6\textwidth]{digging_into_code/strings/C-string.png}
+\caption{Hiew}
+\end{figure}
+
+% FIXME видно \n в конце, потом пробел
+
+\subsubsection{Borland Delphi}
+\myindex{Pascal}
+\myindex{Borland Delphi}
+
+PascalとBorland Delphiの文字列は、8ビットまたは32ビットの文字列長が前に付きます。
+
+例えば：
+
+\begin{lstlisting}[caption=Delphi,style=customasmx86]
+CODE:00518AC8                 dd 19h
+CODE:00518ACC aLoading___Plea db 'Loading... , please wait.',0
+
+...
+
+CODE:00518AFC                 dd 10h
+CODE:00518B00 aPreparingRun__ db 'Preparing run...',0
+\end{lstlisting}
+
+\subsubsection{Unicode}
+
+\myindex{Unicode}
+
+しばしば、Unicodeと呼ばれるものは、各文字が2バイトまたは16ビットを占める文字列をエンコードする方法です。
+これは一般的な用語上の間違いです。
+Unicodeは、世界の多くの文字体系の各文字に数字を割り当てる標準ですが、エンコード方法は記述していません。
+
+\myindex{UTF-8}
+\myindex{UTF-16LE}
+最も人気のあるエンコード方法は：UTF-8（インターネットと*NIXシステムで広く普及）とUTF-16LE（Windowsで使用）です。
+
+\myparagraph{UTF-8}
+
+\myindex{UTF-8}
+UTF-8は文字をエンコードする最も成功した方法の一つです。
+すべてのラテン記号はASCIIと同じようにエンコードされ、ASCIIテーブルを超える記号は複数のバイトを使用してエンコードされます。
+0は以前と同じようにエンコードされるため、すべての標準C文字列関数は他の文字列と同じようにUTF-8文字列で動作します。
+
+様々な言語の記号がUTF-8でどのようにエンコードされ、コードページ437を使用してFARでどのように見えるかを見てみましょう
+\footnote{例と翻訳はここから取得されました：
+\url{http://go.yurichev.com/17304}}：
+
+\begin{figure}[H]
+\centering
+\includegraphics[width=0.6\textwidth]{digging_into_code/strings/multilang_sampler.png}
+\end{figure}
+
+% FIXME: cut it
+\begin{figure}[H]
+\centering
+\myincludegraphics{digging_into_code/strings/multilang_sampler_UTF8.png}
+\caption{FAR: UTF-8}
+\end{figure}
+
+ご覧のとおり、英語の文字列はASCIIと同じに見えます。
+
+ハンガリー語は、いくつかのラテン記号と発音区別符号付きの記号を使用します。
+
+これらの記号は複数のバイトを使用してエンコードされ、赤で下線が引かれています。
+アイスランド語とポーランド語も同じです。
+
+また、先頭には3バイトでエンコードされる「ユーロ」通貨記号もあります。
+
+ここの残りの文字体系はラテン文字とは関係ありません。
+
+少なくともロシア語、アラビア語、ヘブライ語、ヒンディー語では、いくつかの繰り返しバイトを見ることができ、これは驚くことではありません：
+文字体系のすべての記号は通常同じUnicodeテーブルにあるため、そのコードは同じ数字で始まります。
+
+「How much?」文字列の前の最初に、実際には\ac{BOM}である3バイトが見えます。
+\ac{BOM}は使用されるエンコーディングシステムを定義します。
+
+\myparagraph{UTF-16LE}
+
+\myindex{UTF-16LE}
+\myindex{Windows!Win32}
+Windows の多くのwin32関数には\TT{-A}と\TT{-W}のサフィックスがあります。
+最初のタイプの関数は通常の文字列で動作し、もう一方はUTF-16LE文字列（\IT{wide}）で動作します。
+
+2番目のケースでは、各記号は通常\IT{short}型の16ビット値に格納されます。
+
+UTF-16文字列のラテン記号は、HiewやFARでゼロバイトがインターリーブされているように見えます：
+
+\begin{lstlisting}[style=customc]
+int wmain()
+{
+	wprintf (L"Hello, world!\n");
+};
+\end{lstlisting}
+
+\begin{figure}[H]
+\centering
+\includegraphics[width=0.6\textwidth]{digging_into_code/strings/UTF16-string.png}
+\caption{Hiew}
+\end{figure}
+
+これは\gls{Windows NT}システムファイルでよく見ることができます：
+
+\begin{figure}[H]
+\centering
+\includegraphics[width=0.6\textwidth]{digging_into_code/strings/ntoskrnl_UTF16.png}
+\caption{Hiew}
+\end{figure}
+
+\myindex{IDA}
+正確に2バイトを占める文字を持つ文字列は、\IDAで「Unicode」と呼ばれます：
+
+\begin{lstlisting}[style=customasmx86]
+.data:0040E000 aHelloWorld:
+.data:0040E000                 unicode 0, <Hello, world!>
+.data:0040E000                 dw 0Ah, 0
+\end{lstlisting}
+
+これは、ロシア語文字列がUTF-16LEでどのようにエンコードされるかです：
+
+\begin{figure}[H]
+\centering
+\includegraphics[width=0.6\textwidth]{digging_into_code/strings/russian_UTF16.png}
+\caption{Hiew: UTF-16LE}
+\end{figure}
+
+簡単に見つけることができるのは、記号がダイアモンド文字（ASCIIコード4を持つ）でインターリーブされていることです。
+実際、キリル文字は4番目のUnicodeプレーン
+\footnote{\href{http://go.yurichev.com/17003}{wikipedia}}にあります。
+したがって、UTF-16LEのすべてのキリル記号は\TT{0x400-0x4FF}の範囲にあります。
+
+複数の言語で書かれた文字列の例に戻りましょう。
+UTF-16LEでどのように見えるかを示します。
+
+% FIXME: cut it
+\begin{figure}[H]
+\centering
+\myincludegraphics{digging_into_code/strings/multilang_sampler_UTF16.png}
+\caption{FAR: UTF-16LE}
+\end{figure}
+
+ここでも最初に\ac{BOM}が見えます。
+すべてのラテン文字はゼロバイトでインターリーブされています。
+
+発音区別符号付きの一部の文字（ハンガリー語とアイスランド語）も赤で下線が引かれています。
+
+% subsection:
+\input{digging_into_code/strings/base64_EN}

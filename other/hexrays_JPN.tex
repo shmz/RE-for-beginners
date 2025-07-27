@@ -1,0 +1,455 @@
+\mysection{Hex-Rays 2.2.0での私の経験}
+\myindex{Hex-Rays}
+\label{hex_rays}
+
+\subsection{バグ}
+
+いくつかのバグがあります。
+
+まず第一に、Hex-Raysは\ac{FPU}命令が他の命令と（コンパイラのコードジェネレーターによって）インターリーブされると迷子になります。
+
+例えば、これは：
+
+\begin{lstlisting}
+f               proc    near
+
+        	lea     eax, [esp+4]
+	        fild    dword ptr [eax]
+                lea     eax, [esp+8]
+        	fild    dword ptr [eax]
+	        fabs
+                fcompp
+        	fnstsw  ax
+	        test    ah, 1
+                jz      l01
+
+        	mov     eax, 1
+	        retn
+l01:
+                mov     eax, 2
+	        retn
+
+f               endp
+\end{lstlisting}
+
+\dots 正しく次のように逆コンパイルされます：
+
+\begin{lstlisting}
+signed int __cdecl f(signed int a1, signed int a2)
+{
+  signed int result; // eax@2
+
+  if ( fabs((double)a2) >= (double)a1 )
+    result = 2;
+  else
+    result = 1;
+  return result;
+}
+\end{lstlisting}
+
+しかし、最後の命令の一つをコメントアウトしてみましょう：
+
+\begin{lstlisting}
+...
+l01:
+	        ;mov    eax, 2
+        	retn
+...
+\end{lstlisting}
+
+\dots 明らかなバグが発生します：
+
+\begin{lstlisting}
+void __cdecl f(char a1, char a2)
+{
+  fabs((double)a2);
+}
+\end{lstlisting}
+
+これは別のバグです：
+
+\begin{lstlisting}
+extrn f1:dword
+extrn f2:dword
+
+f               proc    near
+
+	        fld     dword ptr [esp+4]
+        	fadd    dword ptr [esp+8]
+                fst     dword ptr [esp+12]
+	        fcomp   ds:const_100
+                fld     dword ptr [esp+16]      ; この命令をコメントアウトするとOKになります
+	        fnstsw  ax
+        	test    ah, 1
+
+                jnz     short l01
+
+	        call    f1
+        	retn
+l01:
+	        call    f2
+        	retn
+
+f               endp
+
+...
+
+const_100       dd 42C80000h            ; 100.0
+\end{lstlisting}
+
+結果：
+
+\begin{lstlisting}
+int __cdecl f(float a1, float a2, float a3, float a4)
+{
+  double v5; // st7@1
+  char v6; // c0@1
+  int result; // eax@2
+
+  v5 = a4;
+  if ( v6 )
+    result = f2(v5);
+  else
+    result = f1(v5);
+  return result;
+}
+\end{lstlisting}
+
+\IT{v6}変数は\IT{char}型で、このコードをコンパイルしようとすると、コンパイラは代入前の変数使用について警告します。
+
+別のバグ：\INS{FPATAN}命令は\IT{atan2()}に正しく逆コンパイルされますが、引数が交換されています。
+
+\subsection{奇妙な特徴}
+
+Hex-Raysは32ビット\IT{int}を64ビットに昇格させることが非常に多いです。
+例：
+
+\begin{lstlisting}
+f               proc    near
+
+	        mov     eax, [esp+4]
+                cdq
+	        xor     eax, edx
+        	sub     eax, edx
+                ; EAX=abs(a1)
+
+	        sub     eax, [esp+8]
+        	; EAX=EAX-a2
+
+                ; この時点でEAXは何らかの方法で64ビット（RAX）に昇格されます
+
+	        cdq
+        	xor     eax, edx
+                sub     eax, edx
+	        ; EAX=abs(abs(a1)-a2)
+
+                retn
+
+f               endp
+\end{lstlisting}
+
+結果：
+
+\begin{lstlisting}
+int __cdecl f(int a1, int a2)
+{
+  __int64 v2; // rax@1
+
+  v2 = abs(a1) - a2;
+  return (HIDWORD(v2) ^ v2) - HIDWORD(v2);
+}
+\end{lstlisting}
+
+おそらく、これは\INS{CDQ}命令の結果でしょうか？確信はありません。
+とにかく、32ビットコードで\IT{\_\_int64}型を見たときは注意してください。
+
+これも奇妙です：
+
+\begin{lstlisting}
+f               proc    near
+
+	        mov     esi, [esp+4]
+
+        	lea     ebx, [esi+10h]
+                cmp     esi, ebx
+	        jge     short l00
+
+                cmp     esi, 1000
+	        jg      short l00
+
+                mov     eax, 2
+	        retn
+
+l00:
+	        mov     eax, 1
+        	retn
+
+f               endp
+\end{lstlisting}
+
+結果：
+
+\begin{lstlisting}
+signed int __cdecl f(signed int a1)
+{
+  signed int result; // eax@3
+
+  if ( __OFSUB__(a1, a1 + 16) ^ 1 && a1 <= 1000 )
+    result = 2;
+  else
+    result = 1;
+  return result;
+}
+\end{lstlisting}
+
+コードは正しいですが、手動介入が必要です。
+
+時々、Hex-Raysは乗算による除算コードを畳み込み（または削減）しません：
+
+\begin{lstlisting}
+f               proc    near
+
+        	mov     eax, [esp+4]
+	        mov     edx, 2AAAAAABh
+                imul    edx
+        	mov     eax, edx
+
+	        retn
+
+f               endp
+\end{lstlisting}
+
+結果：
+
+\begin{lstlisting}
+int __cdecl f(int a1)
+{
+  return (unsigned __int64)(715827883i64 * a1) >> 32;
+}
+\end{lstlisting}
+
+これは手動で畳み込み（書き換え）できます。
+
+これらの特徴の多くは、命令の手動並び替え、アセンブリコードの再コンパイル、
+そしてそれを再びHex-Raysに供給することで解決できます。
+
+\subsection{沈黙}
+
+\begin{lstlisting}
+extrn some_func:dword
+
+f               proc    near
+
+        	mov     ecx, [esp+4]
+	        mov     eax, [esp+8]
+                push    eax
+        	call    some_func
+	        add     esp, 4
+
+                ; ECXを使用
+        	mov     eax, ecx
+
+	        retn
+
+f               endp
+\end{lstlisting}
+
+結果：
+
+\begin{lstlisting}
+int __cdecl f(int a1, int a2)
+{
+  int v2; // ecx@1
+
+  some_func(a2);
+  return v2;
+}
+\end{lstlisting}
+
+\IT{v2}変数（ECXから）が失われました...
+はい、このコードは正しくありません（ECX値は別の関数への呼び出し中に保存されません）が、
+Hex-Raysが警告を出してくれるとよいでしょう。
+
+別の例：
+
+\begin{lstlisting}
+extrn some_func:dword
+
+f               proc    near
+
+	        call    some_func
+        	jnz     l01
+
+                mov     eax, 1
+	        retn
+l01:
+	        mov     eax, 2
+        	retn
+
+f               endp
+\end{lstlisting}
+
+結果：
+
+\begin{lstlisting}
+signed int f()
+{
+  char v0; // zf@1
+  signed int result; // eax@2
+
+  some_func();
+  if ( v0 )
+    result = 1;
+  else
+    result = 2;
+  return result;
+}
+\end{lstlisting}
+
+再び、警告があればよいでしょう。
+
+とにかく、\IT{char}型の変数、または初期化なしで使用される変数を見たときは、何かが間違っていて手動介入が必要であることの明確なサインです。
+
+\subsection{カンマ}
+\myindex{\CLanguageElements!Comma}
+
+C/C++のカンマは悪名高いです。なぜなら、混乱を招くコードにつながる可能性があるからです。
+
+クイズ、このC/C++関数は何を返すでしょうか？
+
+\begin{lstlisting}
+int f()
+{
+	return 1, 2;
+};
+\end{lstlisting}
+
+答えは2です：コンパイラがカンマ式に遭遇すると、すべての部分式を実行し、最後の部分式の値を\IT{返す}コードを生成します。
+
+プロダクションコードで次のようなものを見たことがあります：
+
+\begin{lstlisting}
+if (cond)
+	return global_var=123, 456; // 456が返される
+else
+	return global_var=789, 321; // 321が返される
+\end{lstlisting}
+
+明らかに、プログラマーは追加の波括弧なしでコードを少し短くしたかったのです。
+言い換えれば、カンマは波括弧内でステートメント/コードブロックを形成することなく、いくつかの式を一つにパックすることを可能にします。
+
+\myindex{Scheme}
+\myindex{Racket}
+C/C++のカンマはScheme/Racketの\TT{begin}に近いです：\url{https://docs.racket-lang.org/guide/begin.html}。
+
+おそらく、カンマの唯一の広く受け入れられた使用法は\IT{for()}文です：
+
+\begin{lstlisting}
+char *s="hello, world";
+for(int i=0; *s; s++, i++);
+; i = 文字列長
+\end{lstlisting}
+
+\IT{s++}と\IT{i++}の両方が各ループ反復で実行されます。
+
+詳細：\url{http://stackoverflow.com/questions/52550/what-does-the-comma-operator-do-in-c}。
+
+\myindex{\CLanguageElements!Short-circuit}
+私がこれらすべてを書いている理由は、Hex-Raysが（少なくとも私の場合）カンマと短絡式の両方が豊富なコードを生成するからです。
+例えば、これはHex-Raysからの実際の出力です：
+
+\begin{lstlisting}
+ if ( a >= b || (c = a, (d[a] - e) >> 2 > f) )
+    {
+    	...
+\end{lstlisting}
+
+これは正しく、コンパイルされ動作しますが、それを理解するのは神の助けが必要です。
+これを書き換えると：
+
+\begin{lstlisting}
+if (cond1 || (comma_expr, cond2))
+{
+	...
+\end{lstlisting}
+
+短絡がここで効果的です：最初に\IT{cond1}がチェックされ、それが\IT{true}なら、\IT{if()}本体が実行され、\IT{if()}式の残りは完全に無視されます。
+\IT{cond1}が\IT{false}なら、\IT{comma\_expr}が実行され（前の例では、\IT{a}が\IT{c}にコピーされます）、
+次に\IT{cond2}がチェックされます。
+\IT{cond2}が\IT{true}なら、\IT{if()}本体が実行されるか、されません。
+言い換えれば、\IT{if()}本体は\IT{cond1}が\IT{true}または\IT{cond2}が\IT{true}の場合に実行されますが、
+後者が\IT{true}の場合、\IT{comma\_expr}も実行されます。
+
+今、カンマがなぜそんなに悪名高いのかがわかります。
+
+\textbf{短絡について一言。}
+一般的な初心者の誤解は、部分条件が何らかの不特定の順序でチェックされるということですが、これは真実ではありません。
+\TT{a | b | c}式では、$a$、$b$、$c$は不特定の順序で評価されるため、\TT{||}がC/C++に追加され、短絡を明示的に適用します。
+
+\subsection{データ型}
+
+データ型は逆コンパイラにとって問題です。
+
+Hex-Raysは、逆コンパイル前に正しく設定されていない場合、ローカルスタック内の配列を見つけられない可能性があります。
+グローバル配列についても同じです。
+
+別の問題は大きすぎる関数で、ローカルスタック内の単一のスロットが関数の実行全体で複数の変数によって使用される可能性があることです。
+スロットが\IT{int}変数、次にポインタ、次に\IT{float}変数に使用されることは珍しいケースではありません。
+Hex-Raysはこれを正しく逆コンパイルします：ある型の変数を作成し、関数の様々な部分でそれを別の型にキャストします。
+この問題は、大きな関数を手動でいくつかの小さな関数に分割することで解決しました。
+ローカル変数をグローバル変数にするなど。
+そしてテストを忘れないでください。
+
+\subsection{長くて混乱した式}
+
+時々、書き換え中に、\IT{if()}構造内の長くて理解しにくい式になることがあります：
+
+\begin{lstlisting}
+if ((! (v38 && v30 <= 5 && v27 != -1)) && ((! (v38 && v30 <= 5) && v27 != -1) || (v24 >= 5 || v26)) && v25)
+{
+...
+}
+\end{lstlisting}
+
+Wolfram Mathematicaは\TT{BooleanMinimize[]}関数を使用して、それらの一部を最小化できます：
+
+\begin{lstlisting}
+In[1]:= BooleanMinimize[(! (v38 && v30 <= 5 && v27 != -1)) && v38 && v30 <= 5 && v25 == 0]
+
+Out[1]:= v38 && v25 == 0 && v27 == -1 && v30 <= 5
+\end{lstlisting}
+
+さらに良い方法があります。共通の部分式を見つけることです：
+
+\begin{lstlisting}
+In[2]:= Experimental`OptimizeExpression[(! (v38 && v30 <= 5 && 
+      v27 != -1)) && ((! (v38 && v30 <= 5) && 
+      v27 != -1) || (v24 >= 5 || v26)) && v25]
+
+Out[2]= Experimental`OptimizedExpression[
+ Block[{Compile`$1, Compile`$2}, Compile`$1 = v30 <= 5; 
+  Compile`$2 = 
+   v27 != -1; ! (v38 && Compile`$1 && 
+      Compile`$2) && ((! (v38 && Compile`$1) && Compile`$2) || 
+     v24 >= 5 || v26) && v25]]
+\end{lstlisting}
+
+Mathematicaは2つの新しい変数：\TT{Compile`\$1}と\TT{Compile`\$2}を追加し、その値が式内で複数回使用されます。
+したがって、2つの追加変数を追加できます。
+
+\subsection{私の計画}
+
+\begin{itemize}
+\item 大きな関数を分割します（そしてテストを忘れないでください）。
+時々、大きなループ本体から新しい関数を形成することは非常に役立ちます。
+
+\item 変数、配列などのデータ型をチェック/設定します。
+
+\item 奇妙な結果、\IT{ぶら下がり}変数（初期化前に使用される）を見た場合、命令を手動で交換し、
+再コンパイルして再びHex-Raysに供給してみてください。
+\end{itemize}
+
+\subsection{まとめ}
+
+それにもかかわらず、Hex-Rays 2.2.0の品質は非常に、非常に良いです。
+生活をはるかに楽にしてくれます。

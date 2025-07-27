@@ -1,0 +1,100 @@
+\mysection{基本ブロックの並び替え}
+
+% TODO __builtin_expect in GCC?
+
+\subsection{プロファイルガイド最適化}
+\label{PGO}
+
+\myindex{\oracle}
+\myindex{Intel C++}
+
+この最適化方法は、いくつかの\gls{basic block}を実行可能バイナリファイルの別のセクションに移動することができます。
+
+明らかに、関数の一部には、より頻繁に実行される部分（例：ループ本体）と、
+より少なく実行される部分（例：エラー報告コード、例外ハンドラー）があります。
+
+コンパイラは実行可能ファイルに計測コードを追加し、開発者は多くのテストでそれを実行して統計を収集します。
+
+次に、コンパイラは収集された統計の助けを借りて、
+すべての非頻繁に実行されるコードを別のセクションに移動した最終実行可能ファイルを準備します。
+
+結果として、すべての頻繁に実行される関数コードがコンパクトになり、これは実行速度とキャッシュ使用にとって非常に重要です。
+
+Intel C++でコンパイルされた\oracleコードからの例：
+
+\begin{lstlisting}[caption=orageneric11.dll (win32),style=customasmx86]
+                public _skgfsync
+_skgfsync       proc near
+
+; address 0x6030D86A
+
+                db      66h
+                nop
+                push    ebp
+                mov     ebp, esp
+                mov     edx, [ebp+0Ch]
+                test    edx, edx
+                jz      short loc_6030D884
+                mov     eax, [edx+30h]
+                test    eax, 400h
+                jnz     __VInfreq__skgfsync  ; ログに書き込み
+continue:
+                mov     eax, [ebp+8]
+                mov     edx, [ebp+10h]
+                mov     dword ptr [eax], 0
+                lea     eax, [edx+0Fh]
+                and     eax, 0FFFFFFFCh
+                mov     ecx, [eax]
+                cmp     ecx, 45726963h
+                jnz     error                ; エラーで終了
+                mov     esp, ebp
+                pop     ebp
+                retn
+_skgfsync       endp
+
+...
+
+; address 0x60B953F0
+
+__VInfreq__skgfsync:
+                mov     eax, [edx]
+                test    eax, eax
+                jz      continue
+                mov     ecx, [ebp+10h]
+                push    ecx
+                mov     ecx, [ebp+8]
+                push    edx
+                push    ecx
+                push    offset ... ; "skgfsync(se=0x%x, ctx=0x%x, iov=0x%x)\n"
+                push    dword ptr [edx+4]
+                call    dword ptr [eax] ; ログに書き込み
+                add     esp, 14h
+                jmp     continue
+
+error:
+                mov     edx, [ebp+8]
+                mov     dword ptr [edx], 69AAh ; 27050 "function called with invalid FIB/IOV structure"
+                mov     eax, [eax]
+                mov     [edx+4], eax
+                mov     dword ptr [edx+8], 0FA4h ; 4004
+                mov     esp, ebp
+                pop     ebp
+                retn
+; END OF FUNCTION CHUNK FOR _skgfsync
+\end{lstlisting}
+
+これら2つのコード断片のアドレス間の距離は約9MBです。
+
+すべての非頻繁に実行されるコードは、DLLファイルのコードセクションの最後、すべての関数部分の中に配置されました。
+
+関数のこの部分は、Intel C++コンパイラによって\TT{VInfreq}プレフィックスでマークされました。
+
+ここでは、ログファイルに書き込む関数の一部（おそらくエラーまたは警告またはそのようなものの場合）が見られ、これはOracleの開発者が統計を収集した際にあまり頻繁に実行されなかった（実行されたとしても）と思われます。
+
+ログに書き込む基本ブロックは最終的に制御フローを関数の「ホット」な部分に戻します。
+
+もう一つの「非頻繁」な部分は、エラーコード27050を返す\gls{basic block}です。
+
+Linux ELFファイルでは、すべての非頻繁に実行されるコードはIntel C++によって別の\TT{text.unlikely}セクションに移動され、すべての「ホット」コードは\TT{text.hot}セクションに残されます。
+
+リバースエンジニアの観点から、この情報は関数をそのコア部分とエラー処理部分に分割するのに役立つ可能性があります。

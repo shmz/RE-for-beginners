@@ -1,0 +1,23 @@
+\subsection{MSVC 6.0}
+
+古いコードで発見しました：
+
+\begin{lstlisting}[style=customasmx86]
+                fabs
+                fild    [esp+50h+var_34]
+                fabs
+                fxch    st(1) ; 最初の命令
+                fxch    st(1) ; 2番目の命令
+                faddp   st(1), st
+                fcomp   [esp+50h+var_3C]
+                fnstsw  ax
+                test    ah, 41h
+                jz      short loc_100040B7
+\end{lstlisting}
+
+\myindex{x86!\Instructions!FXCH}
+最初の\INS{FXCH}命令は\TT{ST(0)}と\TT{ST(1)}を交換し、2番目も同じことをするため、両方とも何もしません。
+これはMFC42.dllを使用するプログラムなので、MSVC 6.0、5.0、または1990年代のMSVC 4.2の可能性があります。
+
+このペアは何もしないため、おそらくMSVCコンパイラテストで捕捉されませんでした。
+それとも私が間違っているのでしょうか？

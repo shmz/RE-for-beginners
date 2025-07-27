@@ -1,0 +1,47 @@
+% TODO proof-reading
+\subsection{条件ジャンプ}
+
+それでは条件ジャンプに進みましょう。
+
+\begin{lstlisting}[style=customjava]
+public class abs
+{
+	public static int abs(int a)
+	{
+		if (a<0)
+			return -a;
+		return a;
+	}
+}
+\end{lstlisting}
+
+\begin{lstlisting}
+  public static int abs(int);
+    flags: ACC_PUBLIC, ACC_STATIC
+    Code:
+      stack=1, locals=1, args_size=1
+         0: iload_0       
+         1: ifge          7
+         4: iload_0       
+         5: ineg          
+         6: ireturn       
+         7: iload_0       
+         8: ireturn       
+\end{lstlisting}
+
+\TT{ifge}は\ac{TOS}の値が0以上の場合、オフセット7にジャンプします。
+
+忘れてはいけないのは、任意の\TT{ifXX}命令は（比較される）値をスタックからポップすることです。
+
+\TT{ineg}は\ac{TOS}の値を単純に否定します。
+
+別の例：
+
+\begin{lstlisting}[style=customjava]
+	public static int min (int a, int b)
+	{
+		if (a>b)
+			return b;
+		return a;
+	}
+\end{lstlisting}

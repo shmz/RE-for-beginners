@@ -1,0 +1,93 @@
+% TODO proof-reading
+\subsection{ビットフィールド}
+
+すべてのビット演算は他の\ac{ISA}と同様に動作します：
+
+\begin{lstlisting}[style=customjava]
+	public static int set (int a, int b) 
+	{
+		return a | 1<<b;
+	}
+
+	public static int clear (int a, int b) 
+	{
+		return a & (~(1<<b));
+	}
+\end{lstlisting}
+
+\begin{lstlisting}
+  public static int set(int, int);
+    flags: ACC_PUBLIC, ACC_STATIC
+    Code:
+      stack=3, locals=2, args_size=2
+         0: iload_0       
+         1: iconst_1      
+         2: iload_1       
+         3: ishl          
+         4: ior           
+         5: ireturn       
+
+  public static int clear(int, int);
+    flags: ACC_PUBLIC, ACC_STATIC
+    Code:
+      stack=3, locals=2, args_size=2
+         0: iload_0       
+         1: iconst_1      
+         2: iload_1       
+         3: ishl          
+         4: iconst_m1     
+         5: ixor          
+         6: iand          
+         7: ireturn       
+\end{lstlisting}
+
+\TT{iconst\_m1}は$-1$をスタックにロードします。これは\TT{0xFFFFFFFF}数と同じです。
+
+\TT{0xFFFFFFFF}とのXORは、すべてのビットを反転する効果と同じです
+（\myref{XOR_property}）。
+
+すべてのデータ型を64ビット\IT{long}に拡張してみましょう：
+
+\begin{lstlisting}[style=customjava]
+	public static long lset (long a, int b) 
+	{
+		return a | 1<<b;
+	}
+
+	public static long lclear (long a, int b) 
+	{
+		return a & (~(1<<b));
+	}
+\end{lstlisting}
+
+\begin{lstlisting}
+  public static long lset(long, int);
+    flags: ACC_PUBLIC, ACC_STATIC
+    Code:
+      stack=4, locals=3, args_size=2
+         0: lload_0       
+         1: iconst_1      
+         2: iload_2       
+         3: ishl          
+         4: i2l           
+         5: lor           
+         6: lreturn       
+
+  public static long lclear(long, int);
+    flags: ACC_PUBLIC, ACC_STATIC
+    Code:
+      stack=4, locals=3, args_size=2
+         0: lload_0       
+         1: iconst_1      
+         2: iload_2       
+         3: ishl          
+         4: iconst_m1     
+         5: ixor          
+         6: i2l           
+         7: land          
+         8: lreturn       
+\end{lstlisting}
+
+コードは同じですが、64ビット値で動作する\IT{l}プレフィックスを持つ命令が使用されます。
+
+また、関数の2番目の引数は依然として\IT{int}型で、その中の32ビット値を64ビット値にプロモートする必要がある場合、\TT{i2l}命令が使用されます。これは本質的に\IT{integer}型の値を\IT{long}型に拡張します。

@@ -1,0 +1,39 @@
+% TODO proof-reading
+\subsection{導入}
+
+\newcommand{\JADURL}{\url{http://varaneckas.com/jad/}}
+
+Java（または一般的に\ac{JVM}バイトコード）用のよく知られた逆コンパイラがいくつかあります
+\footnote{例えば、JAD: \JADURL}。
+
+その理由は、\ac{JVM}バイトコードの逆コンパイルが、
+より低レベルなx86コードよりもやや簡単であることです：
+
+\begin{itemize}
+\item データ型に関する情報がはるかに多い。
+\item \ac{JVM}のメモリモデルははるかに厳密で明確に定義されている。
+\item Javaコンパイラは最適化を行わない（\ac{JVM} \ac{JIT}が実行時に行う）ため、
+      クラスファイル内のバイトコードは通常かなり読みやすい。
+      
+\end{itemize}
+
+\ac{JVM}の知識はいつ役立つでしょうか？
+
+\newcommand{\URLListOfJVMLangs}{\url{http://en.wikipedia.org/wiki/List_of_JVM_languages}}
+
+\begin{itemize}
+\item 逆コンパイラの結果を再コンパイルする必要なしに、クラスファイルの手軽で簡単なパッチタスク。
+\item 難読化されたコードの分析。
+\item 独自の難読化ツールの構築。
+\item \ac{JVM}をターゲットとするコンパイラのコードジェネレータ（バックエンド）の構築（Scala、Clojureなど
+      \footnote{完全なリスト：\URLListOfJVMLangs}）。
+      
+\end{itemize}
+
+いくつかの簡単なコード片から始めましょう。
+特に記載がない限り、JDK 1.7を使用しています。
+
+クラスファイルを逆コンパイルするために使用するコマンドです：\\
+\GTT{javap -c -verbose}。
+
+すべての例を準備する際に使用した本：\JavaBook。

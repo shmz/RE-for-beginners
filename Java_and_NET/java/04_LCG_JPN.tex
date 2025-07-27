@@ -1,0 +1,48 @@
+% TODO proof-reading
+\subsection{線形合同法\ac{PRNG}}
+
+シンプルな疑似乱数生成器を試してみましょう。
+これは本書で一度考察したものです（\myref{LCG_simple}）：
+
+\begin{lstlisting}[style=customjava]
+public class LCG 
+{
+	public static int rand_state;
+
+	public void my_srand (int init)
+	{
+		rand_state=init;
+	}
+
+	public static int RNG_a=1664525;
+	public static int RNG_c=1013904223;
+
+	public int my_rand ()
+	{
+		rand_state=rand_state*RNG_a;
+		rand_state=rand_state+RNG_c;
+		return rand_state & 0x7fff;
+	}
+}
+\end{lstlisting}
+
+開始時に初期化されるクラスフィールドがいくつかあります。
+
+しかし、どのように？
+\TT{javap}の出力でクラスコンストラクタを見つけることができます：
+
+\begin{lstlisting}
+  static {};
+    flags: ACC_STATIC
+    Code:
+      stack=1, locals=0, args_size=0
+         0: ldc           #5         // int 1664525
+         2: putstatic     #3         // Field RNG_a:I
+         5: ldc           #6         // int 1013904223
+         7: putstatic     #4         // Field RNG_c:I
+        10: return        
+\end{lstlisting}
+
+これが変数が初期化される方法です。
+
+\TT{RNG\_a}はクラス内の3番目のスロットを占有し、\TT{RNG\_c}は4番目のスロットを占有します。
