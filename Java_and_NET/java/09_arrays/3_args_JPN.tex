@@ -1,0 +1,46 @@
+% TODO proof-reading
+\subsubsection{\main関数の唯一の引数も配列です}
+
+\main関数の唯一の引数である文字列の配列を使用します：
+
+
+\begin{lstlisting}[style=customjava]
+public class UseArgument
+{
+	public static void main(String[] args)
+	{
+		System.out.print("Hi, ");
+		System.out.print(args[1]);
+		System.out.println(". How are you?");
+	}
+}
+\end{lstlisting}
+
+0番目の引数はプログラム名です（\CCppなどと同様）、
+従ってユーザーが提供する1番目の引数は1番です。
+
+
+\begin{lstlisting}
+  public static void main(java.lang.String[]);
+    flags: ACC_PUBLIC, ACC_STATIC
+    Code:
+      stack=3, locals=1, args_size=1
+         0: getstatic     #2      // Field java/lang/System.out:Ljava/io/PrintStream;
+         3: ldc           #3      // String Hi, 
+         5: invokevirtual #4      // Method java/io/PrintStream.print:(Ljava/lang/String;)V
+         8: getstatic     #2      // Field java/lang/System.out:Ljava/io/PrintStream;
+        11: aload_0       
+        12: iconst_1      
+        13: aaload        
+        14: invokevirtual #4      // Method java/io/PrintStream.print:(Ljava/lang/String;)V
+        17: getstatic     #2      // Field java/lang/System.out:Ljava/io/PrintStream;
+        20: ldc           #5      // String . How are you?
+        22: invokevirtual #6      // Method java/io/PrintStream.println:(Ljava/lang/String;)V
+        25: return        
+\end{lstlisting}
+
+11の\TT{aload\_0}は0番目の\ac{LVA}スロット（1番目で唯一の\main引数）の\IT{参照}をロードします。
+
+12と13の\TT{iconst\_1}と\TT{aaload}は、配列の最初（0から数える）の要素への\IT{参照}を取得します。
+
+文字列オブジェクトへの\IT{参照}は、オフセット14で\ac{TOS}にあり、そこから\TT{println}メソッドによって取得されます。

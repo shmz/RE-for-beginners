@@ -1,0 +1,105 @@
+% TODO proof-reading
+\subsubsection{簡単な例}
+
+まず、10個の整数の配列を作成して、それを満たしてみましょう：
+
+\begin{lstlisting}[style=customjava]
+	public static void main(String[] args) 
+	{
+		int a[]=new int[10];
+		for (int i=0; i<10; i++)
+			a[i]=i;
+		dump (a);
+	}
+\end{lstlisting}
+
+\begin{lstlisting}
+  public static void main(java.lang.String[]);
+    flags: ACC_PUBLIC, ACC_STATIC
+    Code:
+      stack=3, locals=3, args_size=1
+         0: bipush        10
+         2: newarray       int
+         4: astore_1      
+         5: iconst_0      
+         6: istore_2      
+         7: iload_2       
+         8: bipush        10
+        10: if_icmpge     23
+        13: aload_1       
+        14: iload_2       
+        15: iload_2       
+        16: iastore       
+        17: iinc          2, 1
+        20: goto          7
+        23: aload_1       
+        24: invokestatic  #4     // Method dump:([I)V
+        27: return        
+\end{lstlisting}
+
+\TT{newarray}命令は、10個の\IT{int}要素の配列オブジェクトを作成します。
+
+配列のサイズは\TT{bipush}で設定され、\ac{TOS}に残されます。
+
+配列の型は\TT{newarray}命令のオペランドで設定されます。
+
+\TT{newarray}の実行後、ヒープに新しく作成された配列への\IT{参照}（またはポインタ）が\ac{TOS}に残されます。
+
+\TT{astore\_1}は、\IT{参照}を\ac{LVA}の1番目のスロットに格納します。
+
+\main関数の第二部分は、\IT{i}を対応する配列要素に格納するループです。
+
+\TT{aload\_1}は配列の\IT{参照}を取得し、スタックに置きます。
+
+\TT{iastore}は、スタックから整数値を取得し、現在\ac{TOS}にある\IT{参照}の配列に格納します。
+
+\main関数の第三部分は、\TT{dump()}関数を呼び出します。
+
+その引数は\TT{aload\_1}（オフセット23）で準備されます。
+
+次に\TT{dump()}関数に進みましょう：
+
+\begin{lstlisting}[style=customjava]
+	public static void dump(int a[])
+	{
+		for (int i=0; i<a.length; i++)
+			System.out.println(a[i]);
+	}
+\end{lstlisting}
+
+\begin{lstlisting}
+  public static void dump(int[]);
+    flags: ACC_PUBLIC, ACC_STATIC
+    Code:
+      stack=3, locals=2, args_size=1
+         0: iconst_0      
+         1: istore_1      
+         2: iload_1       
+         3: aload_0       
+         4: arraylength   
+         5: if_icmpge     23
+         8: getstatic     #2      // Field java/lang/System.out:Ljava/io/PrintStream;
+        11: aload_0       
+        12: iload_1       
+        13: iaload        
+        14: invokevirtual #3      // Method java/io/PrintStream.println:(I)V
+        17: iinc          1, 1
+        20: goto          2
+        23: return        
+\end{lstlisting}
+
+入力配列への\TT{参照}は0番目のスロットにあります。
+
+ソースコード中の\TT{a.length}式は\TT{arraylength}命令に変換されます：
+これは配列への\IT{参照}を取り、配列サイズを\ac{TOS}に残します。
+
+オフセット13の\TT{iaload}は配列要素の読み込みに使用され、
+配列の\IT{参照}がスタックに存在する必要があります（11の\TT{aload\_0}で準備）、
+そしてインデックスも必要です（オフセット12の\TT{iload\_1}で準備）。
+
+言うまでもなく、\IT{a}で始まる命令は誤って\IT{配列}命令として理解される可能性があります。
+
+これは正しくありません。
+これらの命令はオブジェクトへの\IT{参照}で動作します。
+
+そして配列と文字列もオブジェクトです。

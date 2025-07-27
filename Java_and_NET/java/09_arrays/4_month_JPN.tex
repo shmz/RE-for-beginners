@@ -1,0 +1,138 @@
+% TODO proof-reading
+\subsubsection{事前初期化された文字列配列}
+\label{Java_2D_array_month}
+
+\begin{lstlisting}[style=customjava]
+class Month
+{
+	public static String[] months = 
+	{
+		"January", 
+		"February", 
+		"March", 
+		"April",
+		"May",
+		"June",
+		"July",
+		"August",
+		"September",
+		"October",
+		"November",
+		"December"
+	};
+
+	public String get_month (int i)
+	{
+		return months[i];
+	};
+} 
+\end{lstlisting}
+
+\TT{get\_month()}関数は単純です：
+
+\begin{lstlisting}
+  public java.lang.String get_month(int);
+    flags: ACC_PUBLIC
+    Code:
+      stack=2, locals=2, args_size=2
+         0: getstatic     #2         // Field months:[Ljava/lang/String;
+         3: iload_1       
+         4: aaload        
+         5: areturn       
+\end{lstlisting}
+
+\TT{aaload}は\IT{参照}の配列で動作します。
+
+Java文字列はオブジェクトなので、それらを操作するには\IT{a}命令が使用されます。
+
+\TT{areturn}は\TT{String}オブジェクトへの\IT{参照}を返します。
+
+
+\TT{months[]}配列はどのように初期化されるのでしょうか？
+
+
+\begin{lstlisting}
+  static {};
+    flags: ACC_STATIC
+    Code:
+      stack=4, locals=0, args_size=0
+         0: bipush        12
+         2: anewarray     #3         // class java/lang/String
+         5: dup           
+         6: iconst_0      
+         7: ldc           #4         // String January
+         9: aastore       
+        10: dup           
+        11: iconst_1      
+        12: ldc           #5         // String February
+        14: aastore       
+        15: dup           
+        16: iconst_2      
+        17: ldc           #6         // String March
+        19: aastore       
+        20: dup           
+        21: iconst_3      
+        22: ldc           #7         // String April
+        24: aastore       
+        25: dup           
+        26: iconst_4      
+        27: ldc           #8         // String May
+        29: aastore       
+        30: dup           
+        31: iconst_5      
+        32: ldc           #9         // String June
+        34: aastore       
+        35: dup           
+        36: bipush        6
+        38: ldc           #10        // String July
+        40: aastore       
+        41: dup           
+        42: bipush        7
+        44: ldc           #11        // String August
+        46: aastore       
+        47: dup           
+        48: bipush        8
+        50: ldc           #12        // String September
+        52: aastore       
+        53: dup           
+        54: bipush        9
+        56: ldc           #13        // String October
+        58: aastore       
+        59: dup           
+        60: bipush        10
+        62: ldc           #14        // String November
+        64: aastore       
+        65: dup           
+        66: bipush        11
+        68: ldc           #15        // String December
+        70: aastore       
+        71: putstatic     #2         // Field months:[Ljava/lang/String;
+        74: return        
+\end{lstlisting}
+
+\TT{anewarray}は\IT{参照}の新しい配列を作成します（したがって\IT{a}接頭辞）。
+
+オブジェクトの型は\TT{anewarray}のオペランドで定義され、それは\\
+\q{java/lang/String}文字列です。
+
+\TT{anewarray}の前の\TT{bipush 12}は配列のサイズを設定します。
+
+ここで新しい命令が見えます：\TT{dup}。
+
+
+\myindex{Forth}
+これはスタックコンピュータ（Forthプログラミング言語を含む）の標準命令で、\ac{TOS}の値を単純に複製します。
+
+\myindex{x86!\Instructions!FDUP}
+ちなみに、FPU 80x87もスタックコンピュータで、類似の命令を持っています -- \INS{FDUP}。
+
+
+これは配列への\IT{参照}を複製するために使用されます。なぜなら\TT{aastore}命令がスタックから配列への\IT{参照}をポップしますが、次の\TT{aastore}が再びそれを必要とするからです。
+
+Javaコンパイラは、各配列ストア操作の前に\TT{getstatic}命令を生成する（つまり11回）よりも、\TT{dup}を生成する方が良いと判断しました。
+
+
+\TT{aastore}は\ac{TOS}から取得されたインデックスで配列に\IT{参照}（文字列への）を格納します。
+
+
+最後に、\TT{putstatic}は新しく作成された配列への\IT{参照}をオブジェクトの2番目のフィールド、つまり\IT{months}フィールドに格納します。
